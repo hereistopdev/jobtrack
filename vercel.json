@@ -4,13 +4,17 @@
   "installCommand": "npm install && npm install --prefix backend && npm install --prefix frontend",
   "framework": null,
   "functions": {
-    "api/[...path].mjs": {
+    "api/index.mjs": {
       "includeFiles": "backend/src/**",
       "memory": 1024,
       "maxDuration": 30
     }
   },
   "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "/api"
+    },
     {
       "source": "/((?!api/).*)",
       "destination": "/index.html"
