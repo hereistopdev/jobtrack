@@ -4,7 +4,7 @@
   "installCommand": "npm install && npm install --prefix backend && npm install --prefix frontend",
   "framework": null,
   "functions": {
-    "api/[[...route]].mjs": {
+    "api/[...path].mjs": {
       "includeFiles": "backend/src/**",
       "memory": 1024,
       "maxDuration": 30
