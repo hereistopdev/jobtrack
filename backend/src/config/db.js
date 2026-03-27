@@ -21,8 +21,18 @@ export async function connectDB() {
     return mongoose.connection;
   }
 
+  const opts = {
+    maxPoolSize: 5,
+    // Stay under Vercel’s function limit (often 10s on Hobby) so we fail fast instead of hanging
+    serverSelectionTimeoutMS: 6000,
+    connectTimeoutMS: 6000,
+    socketTimeoutMS: 45000,
+    // Avoid long IPv6 fallback delays between some hosts and Atlas
+    family: 4
+  };
+
   globalForMongoose.mongoosePromise = mongoose
-    .connect(mongoUri)
+    .connect(mongoUri, opts)
     .then((m) => {
       globalForMongoose.mongooseConn = m.connection;
       console.log("MongoDB connected");
