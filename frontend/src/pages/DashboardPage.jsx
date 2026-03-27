@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   addJobInterview,
   createJobLink,
@@ -33,6 +33,44 @@ export default function DashboardPage() {
   const [dateTo, setDateTo] = useState("");
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+
+  const jobLinkInputRef = useRef(null);
+  const searchInputRef = useRef(null);
+
+  useEffect(() => {
+    const onKeyDown = (e) => {
+      const mod = e.ctrlKey || e.metaKey;
+      if (!mod) return;
+      const k = e.key?.toLowerCase();
+      if (k !== "b" && k !== "f") return;
+      if (e.target?.closest?.('[aria-modal="true"]')) return;
+
+      if (k === "b") {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = jobLinkInputRef.current;
+        if (el && !el.disabled) {
+          el.focus();
+          el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+        return;
+      }
+
+      if (k === "f") {
+        e.preventDefault();
+        e.stopPropagation();
+        const el = searchInputRef.current;
+        if (el) {
+          el.focus();
+          el.select?.();
+          el.scrollIntoView({ behavior: "smooth", block: "nearest" });
+        }
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => window.removeEventListener("keydown", onKeyDown, true);
+  }, []);
 
   const loadLinks = async () => {
     try {
@@ -191,7 +229,12 @@ export default function DashboardPage() {
 
       <div className="dashboard-split">
         <aside className="dashboard-panel dashboard-panel-left" aria-label="Add job link">
-          <JobForm onSubmit={handleSubmit} editingItem={editingItem} onCancelEdit={() => setEditingItem(null)} />
+          <JobForm
+            linkInputRef={jobLinkInputRef}
+            onSubmit={handleSubmit}
+            editingItem={editingItem}
+            onCancelEdit={() => setEditingItem(null)}
+          />
         </aside>
 
         <div className="dashboard-panel dashboard-panel-right">
@@ -199,6 +242,7 @@ export default function DashboardPage() {
             <div className="toolbar-filters-row">
               <div className="toolbar-search">
                 <input
+                  ref={searchInputRef}
                   placeholder="Search company, status, notes, added by…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}

@@ -13,7 +13,7 @@ const emptyForm = () => ({
   notes: ""
 });
 
-function JobForm({ onSubmit, editingItem, onCancelEdit }) {
+function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef }) {
   const [form, setForm] = useState(emptyForm);
   const [parsing, setParsing] = useState(false);
   const lastParsedLinkRef = useRef("");
@@ -101,6 +101,7 @@ function JobForm({ onSubmit, editingItem, onCancelEdit }) {
         Job link
         <span className="field-hint">Paste a posting URL to autofill company and role (best effort).</span>
         <input
+          ref={linkInputRef}
           name="link"
           type="url"
           value={form.link}

@@ -30,7 +30,30 @@ const jobLinkSchema = new mongoose.Schema(
       type: String,
       trim: true,
       default: ""
-    }
+    },
+    country: {
+      type: String,
+      trim: true,
+      default: ""
+    },
+    createdBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: false
+    },
+    interviews: [
+      {
+        label: {
+          type: String,
+          trim: true,
+          default: "Interview"
+        },
+        scheduledAt: {
+          type: Date,
+          required: true
+        }
+      }
+    ]
   },
   { timestamps: true }
 );
