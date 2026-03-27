@@ -1,22 +1,7 @@
 {
   "buildCommand": "npm run vercel-build",
   "outputDirectory": "frontend/dist",
-  "installCommand": "npm install && npm install --prefix backend && npm install --prefix frontend",
+  "installCommand": "npm install --prefix frontend",
   "framework": null,
-  "functions": {
-    "api/index.mjs": {
-      "includeFiles": "backend/src/**",
-      "maxDuration": 60
-    }
-  },
-  "rewrites": [
-    {
-      "source": "/api/(.*)",
-      "destination": "/api"
-    },
-    {
-      "source": "/((?!api/).*)",
-      "destination": "/index.html"
-    }
-  ]
+  "rewrites": [{ "source": "/(.*)", "destination": "/index.html" }]
 }

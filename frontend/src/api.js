@@ -1,6 +1,13 @@
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ||
-  (import.meta.env.PROD ? "/api" : "http://localhost:5000/api");
+function resolveApiBase() {
+  const v = import.meta.env.VITE_API_BASE_URL?.trim();
+  if (v) return v.replace(/\/$/, "");
+  if (import.meta.env.DEV) return "http://localhost:5000/api";
+  throw new Error(
+    "VITE_API_BASE_URL is not set. In Vercel, add it (Production + Preview): your Render API origin with /api, e.g. https://jobtrack-api.onrender.com/api"
+  );
+}
+
+const API_BASE_URL = resolveApiBase();
 const TOKEN_KEY = "jobtrack_token";
 
 function authHeaders(explicitToken) {

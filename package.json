@@ -1,11 +1,8 @@
 {
   "name": "jobtrack",
   "private": true,
-  "description": "Root package for Vercel: installs serverless bridge + delegates to frontend/backend",
+  "description": "Root package: Vercel builds the frontend from ./frontend",
   "scripts": {
     "vercel-build": "npm run build --prefix frontend"
-  },
-  "dependencies": {
-    "serverless-http": "^3.2.0"
   }
 }

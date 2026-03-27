@@ -8,9 +8,13 @@ import analyticsRouter from "./routes/analytics.js";
 
 const app = express();
 
+const corsOrigins = process.env.CORS_ORIGIN
+  ? process.env.CORS_ORIGIN.split(",").map((s) => s.trim()).filter(Boolean)
+  : null;
+
 app.use(
   cors({
-    origin: process.env.CORS_ORIGIN || true,
+    origin: corsOrigins && corsOrigins.length ? corsOrigins : true,
     credentials: true
   })
 );

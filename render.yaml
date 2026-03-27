@@ -1,0 +1,13 @@
+# Render Blueprint — Web service for the Express API (deploy backend here).
+# Connect the repo in Render and use this file, or create a Web Service manually with root directory "backend".
+
+services:
+  - type: web
+    name: jobtrack-api
+    runtime: node
+    rootDir: backend
+    buildCommand: npm install
+    startCommand: npm start
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
