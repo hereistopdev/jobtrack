@@ -1,11 +1,21 @@
 import { useEffect, useState } from "react";
-import { fetchAdminUsers, updateAdminUser } from "../api";
+import { adminBulkDeleteJobLinks, fetchAdminUsers, updateAdminUser } from "../api";
+
+const CONFIRM_PHRASE = "DELETE_JOB_LINKS";
 
 export default function UsersPage() {
   const [users, setUsers] = useState([]);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState(null);
+
+  const [deleteAll, setDeleteAll] = useState(false);
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [selectedUserIds, setSelectedUserIds] = useState(() => new Set());
+  const [confirmText, setConfirmText] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const [bulkResult, setBulkResult] = useState("");
 
   const load = async () => {
     try {
@@ -34,6 +44,61 @@ export default function UsersPage() {
       setError(e.message);
     } finally {
       setSavingId(null);
+    }
+  };
+
+  const toggleUserFilter = (id) => {
+    setSelectedUserIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const handleBulkDelete = async () => {
+    setError("");
+    setBulkResult("");
+    if (confirmText !== CONFIRM_PHRASE) {
+      setError(`Type exactly ${CONFIRM_PHRASE} in the confirmation field.`);
+      return;
+    }
+    if (!deleteAll && !dateFrom && !dateTo && selectedUserIds.size === 0) {
+      setError('Choose "Delete all job links", or set a date range and/or pick at least one user.');
+      return;
+    }
+
+    const summary = deleteAll
+      ? "ALL job link records on the team board (every user)."
+      : [
+          dateFrom || dateTo
+            ? `Job date ${dateFrom || "…"} → ${dateTo || "…"} (inclusive, UTC calendar days).`
+            : null,
+          selectedUserIds.size > 0
+            ? `Only rows added by ${selectedUserIds.size} selected user(s).`
+            : "All users (for the chosen dates, if any)."
+        ]
+          .filter(Boolean)
+          .join(" ");
+
+    const ok = window.confirm(`Permanently delete matching job links?\n\n${summary}\n\nThis cannot be undone.`);
+    if (!ok) return;
+
+    setBulkBusy(true);
+    try {
+      const payload = { confirm: CONFIRM_PHRASE, deleteAll };
+      if (!deleteAll) {
+        if (dateFrom) payload.dateFrom = dateFrom;
+        if (dateTo) payload.dateTo = dateTo;
+        if (selectedUserIds.size > 0) payload.userIds = [...selectedUserIds];
+      }
+      const data = await adminBulkDeleteJobLinks(payload);
+      setBulkResult(data.message || `Removed ${data.deletedCount ?? 0} record(s).`);
+      setConfirmText("");
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setBulkBusy(false);
     }
   };
 
@@ -92,6 +157,85 @@ export default function UsersPage() {
           </div>
         </div>
       )}
+
+      <section className="card admin-bulk-delete-card" aria-label="Bulk delete job links">
+        <h2>Remove job link records</h2>
+        <p className="admin-bulk-delete-warn">
+          Deletes rows from the <strong>job board</strong> only (not user accounts). Use filters, or remove everything.
+          Matching uses each row&apos;s <strong>job date</strong> field and <strong>who added</strong> the link.
+        </p>
+
+        <label className="admin-bulk-delete-check">
+          <input
+            type="checkbox"
+            checked={deleteAll}
+            onChange={(e) => {
+              setDeleteAll(e.target.checked);
+              if (e.target.checked) {
+                setDateFrom("");
+                setDateTo("");
+                setSelectedUserIds(new Set());
+              }
+            }}
+          />
+          <span>Delete <strong>all</strong> job links (entire board)</span>
+        </label>
+
+        {!deleteAll && (
+          <div className="admin-bulk-delete-filters">
+            <div className="admin-bulk-delete-dates">
+              <label className="toolbar-date-label">
+                Job date from
+                <input type="date" value={dateFrom} onChange={(e) => setDateFrom(e.target.value)} />
+              </label>
+              <label className="toolbar-date-label">
+                Job date to
+                <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
+              </label>
+            </div>
+            <fieldset className="admin-bulk-delete-users">
+              <legend>Added by (optional — leave none checked to include every user for the date range)</legend>
+              <div className="admin-bulk-delete-user-chips">
+                {users.map((u) => (
+                  <label key={u._id} className="admin-bulk-delete-user-label">
+                    <input
+                      type="checkbox"
+                      checked={selectedUserIds.has(u._id)}
+                      onChange={() => toggleUserFilter(u._id)}
+                    />
+                    <span className="cell-ellipsis" title={u.email}>
+                      {u.email}
+                    </span>
+                  </label>
+                ))}
+              </div>
+            </fieldset>
+            <p className="field-hint">
+              Provide a <strong>date range</strong> and/or <strong>one or more users</strong>. If you only pick users
+              (no dates), all of their links are removed.
+            </p>
+          </div>
+        )}
+
+        <label className="admin-bulk-delete-confirm-label full-width">
+          Type <code className="admin-bulk-delete-code">{CONFIRM_PHRASE}</code> to confirm
+          <input
+            type="text"
+            value={confirmText}
+            onChange={(e) => setConfirmText(e.target.value)}
+            autoComplete="off"
+            placeholder={CONFIRM_PHRASE}
+          />
+        </label>
+
+        <div className="actions">
+          <button type="button" className="danger" disabled={bulkBusy || loading} onClick={handleBulkDelete}>
+            {bulkBusy ? "Deleting…" : "Delete matching records"}
+          </button>
+        </div>
+
+        {bulkResult && <p className="admin-bulk-delete-success">{bulkResult} Refresh the job board to see changes.</p>}
+      </section>
     </main>
   );
 }

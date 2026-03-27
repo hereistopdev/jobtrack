@@ -1,6 +1,24 @@
 import InterviewScheduleCell from "./InterviewScheduleCell";
 import { colorsForUser, fullAddedByTitle, shortAddedByName } from "../utils/userDisplay";
 
+function SortTh({ id, label, sortKey, sortDir, onSort, className }) {
+  const active = sortKey === id;
+  return (
+    <th
+      scope="col"
+      className={className}
+      aria-sort={active ? (sortDir === "asc" ? "ascending" : "descending") : "none"}
+    >
+      <button type="button" className="sortable-heading" onClick={() => onSort(id)}>
+        <span>{label}</span>
+        <span className="sort-indicator" aria-hidden>
+          {active ? (sortDir === "asc" ? "▲" : "▼") : ""}
+        </span>
+      </button>
+    </th>
+  );
+}
+
 function JobTable({
   items,
   totalLinksCount = 0,
@@ -10,8 +28,13 @@ function JobTable({
   onEdit,
   onDelete,
   onAddInterview,
-  onRemoveInterview
+  onRemoveInterview,
+  sortKey,
+  sortDir,
+  onSort
 }) {
+  const sortable = typeof onSort === "function" && sortKey != null && sortDir != null;
+
   if (!items.length) {
     if (totalLinksCount > 0) {
       return (
@@ -37,16 +60,59 @@ function JobTable({
               <th className="col-num" scope="col">
                 #
               </th>
-              <th className="th-company">Company</th>
-              <th className="th-role">Role</th>
-              <th className="th-country">Country</th>
-              <th className="th-link">Link</th>
-              <th className="th-date">Date</th>
-              <th className="th-status">Status</th>
-              <th className="th-interviews">Interviews</th>
-              <th className="th-by">Added by</th>
-              <th className="th-notes">Notes</th>
-              <th className="th-actions">Actions</th>
+              {sortable ? (
+                <>
+                  <SortTh id="company" label="Company" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-company" />
+                  <SortTh id="title" label="Role" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-role" />
+                  <SortTh id="country" label="Country" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-country" />
+                  <SortTh id="link" label="Link" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-link" />
+                  <SortTh id="date" label="Date" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-date" />
+                  <SortTh id="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-status" />
+                  <SortTh
+                    id="interviews"
+                    label="Interviews"
+                    sortKey={sortKey}
+                    sortDir={sortDir}
+                    onSort={onSort}
+                    className="th-interviews"
+                  />
+                  <SortTh id="addedBy" label="Added by" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-by" />
+                  <SortTh id="notes" label="Notes" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-notes" />
+                </>
+              ) : (
+                <>
+                  <th className="th-company" scope="col">
+                    Company
+                  </th>
+                  <th className="th-role" scope="col">
+                    Role
+                  </th>
+                  <th className="th-country" scope="col">
+                    Country
+                  </th>
+                  <th className="th-link" scope="col">
+                    Link
+                  </th>
+                  <th className="th-date" scope="col">
+                    Date
+                  </th>
+                  <th className="th-status" scope="col">
+                    Status
+                  </th>
+                  <th className="th-interviews" scope="col">
+                    Interviews
+                  </th>
+                  <th className="th-by" scope="col">
+                    Added by
+                  </th>
+                  <th className="th-notes" scope="col">
+                    Notes
+                  </th>
+                </>
+              )}
+              <th className="th-actions" scope="col">
+                Actions
+              </th>
             </tr>
           </thead>
           <tbody>

@@ -9,8 +9,10 @@ import {
 } from "../api";
 import { useAuth } from "../context/AuthContext";
 import JobForm from "../components/JobForm";
+import ExcelImportCard from "../components/ExcelImportCard";
 import JobTable from "../components/JobTable";
 import PaginationBar from "../components/PaginationBar";
+import { defaultLast7DayRange } from "../utils/dateRange";
 
 function canModifyRow(item, user) {
   if (!user) return false;
@@ -29,8 +31,9 @@ export default function DashboardPage() {
   const [error, setError] = useState("");
   const [query, setQuery] = useState("");
   const [roleQuery, setRoleQuery] = useState("");
-  const [dateFrom, setDateFrom] = useState("");
-  const [dateTo, setDateTo] = useState("");
+  const [dateFrom, setDateFrom] = useState(() => defaultLast7DayRange().dateFrom);
+  const [dateTo, setDateTo] = useState(() => defaultLast7DayRange().dateTo);
+  const [sort, setSort] = useState({ key: "date", dir: "desc" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
 
@@ -88,6 +91,10 @@ export default function DashboardPage() {
   useEffect(() => {
     loadLinks();
   }, []);
+
+  const handleExcelImported = (items) => {
+    setLinks((prev) => [...items, ...prev]);
+  };
 
   const handleSubmit = async (payload) => {
     try {
@@ -197,12 +204,69 @@ export default function DashboardPage() {
     return list;
   }, [links, query, roleQuery, dateFrom, dateTo]);
 
-  const totalFound = filteredLinks.length;
+  const sortedFilteredLinks = useMemo(() => {
+    const list = [...filteredLinks];
+    const { key, dir } = sort;
+    const mult = dir === "asc" ? 1 : -1;
+
+    const valueFor = (item) => {
+      switch (key) {
+        case "company":
+          return (item.company || "").toLowerCase();
+        case "title":
+          return (item.title || "").toLowerCase();
+        case "country":
+          return (item.country || "").toLowerCase();
+        case "link":
+          return (item.link || "").toLowerCase();
+        case "date":
+          return new Date(item.date).getTime() || 0;
+        case "status":
+          return (item.status || "").toLowerCase();
+        case "interviews":
+          return (item.interviews || []).length;
+        case "addedBy": {
+          const c = item.createdBy;
+          const s =
+            c && typeof c === "object" ? `${c.email || ""} ${c.name || ""}`.trim().toLowerCase() : "";
+          return s;
+        }
+        case "notes":
+          return (item.notes || "").toLowerCase();
+        default:
+          return "";
+      }
+    };
+
+    list.sort((a, b) => {
+      const va = valueFor(a);
+      const vb = valueFor(b);
+      if (typeof va === "number" && typeof vb === "number") {
+        if (va === vb) return 0;
+        return va < vb ? -mult : mult;
+      }
+      const sa = String(va);
+      const sb = String(vb);
+      if (sa === sb) return 0;
+      return sa < sb ? -mult : mult;
+    });
+    return list;
+  }, [filteredLinks, sort]);
+
+  const toggleSort = (columnKey) => {
+    setSort((s) =>
+      s.key === columnKey
+        ? { key: columnKey, dir: s.dir === "asc" ? "desc" : "asc" }
+        : { key: columnKey, dir: columnKey === "date" ? "desc" : "asc" }
+    );
+  };
+
+  const totalFound = sortedFilteredLinks.length;
   const totalPages = totalFound === 0 ? 0 : Math.ceil(totalFound / pageSize);
 
   useEffect(() => {
     setPage(1);
-  }, [query, roleQuery, dateFrom, dateTo]);
+  }, [query, roleQuery, dateFrom, dateTo, sort.key, sort.dir]);
 
   useEffect(() => {
     if (totalFound === 0) return;
@@ -213,7 +277,7 @@ export default function DashboardPage() {
   const currentPage =
     totalFound === 0 ? 0 : Math.min(Math.max(1, page), Math.max(1, totalPages));
   const pageStart = totalFound === 0 ? 0 : (currentPage - 1) * pageSize;
-  const paginatedItems = filteredLinks.slice(pageStart, pageStart + pageSize);
+  const paginatedItems = sortedFilteredLinks.slice(pageStart, pageStart + pageSize);
 
   return (
     <main className="container container-dashboard">
@@ -235,6 +299,7 @@ export default function DashboardPage() {
             editingItem={editingItem}
             onCancelEdit={() => setEditingItem(null)}
           />
+          <ExcelImportCard onImported={handleExcelImported} />
         </aside>
 
         <div className="dashboard-panel dashboard-panel-right">
@@ -269,11 +334,24 @@ export default function DashboardPage() {
                 To
                 <input type="date" value={dateTo} onChange={(e) => setDateTo(e.target.value)} />
               </label>
-              {(dateFrom || dateTo) && (
-                <button type="button" className="muted small-inline" onClick={() => { setDateFrom(""); setDateTo(""); }}>
-                  Clear dates
+              <div className="toolbar-date-actions">
+                <button
+                  type="button"
+                  className="muted small-inline"
+                  onClick={() => {
+                    const r = defaultLast7DayRange();
+                    setDateFrom(r.dateFrom);
+                    setDateTo(r.dateTo);
+                  }}
+                >
+                  Last 7 days
                 </button>
-              )}
+                {(dateFrom || dateTo) && (
+                  <button type="button" className="muted small-inline" onClick={() => { setDateFrom(""); setDateTo(""); }}>
+                    Clear dates
+                  </button>
+                )}
+              </div>
             </div>
             <span className="toolbar-count" aria-live="polite">
               <strong>{totalFound}</strong> found · <span className="toolbar-count-total">{links.length} total</span>
@@ -307,6 +385,9 @@ export default function DashboardPage() {
                 onDelete={handleDelete}
                 onAddInterview={handleAddInterview}
                 onRemoveInterview={handleRemoveInterview}
+                sortKey={sort.key}
+                sortDir={sort.dir}
+                onSort={toggleSort}
               />
             </>
           )}

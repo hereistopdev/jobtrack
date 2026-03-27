@@ -1,11 +1,22 @@
 import express from "express";
+import multer from "multer";
 import { JobLink } from "../models/JobLink.js";
 import { parseJobUrl } from "../services/parseJobUrl.js";
 import { requireAuth } from "../middleware/auth.js";
 import { canModifyJobLink } from "../utils/jobPermissions.js";
 import { findDuplicateJobLink, formatDuplicateResponse } from "../utils/duplicateJobLink.js";
+import { importJobLinksFromExcelBuffer } from "../utils/excelJobImport.js";
 
 const router = express.Router();
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 },
+  fileFilter: (_req, file, cb) => {
+    const ok = /\.(xlsx|xls)$/i.test(file.originalname || "");
+    cb(null, ok);
+  }
+});
 
 router.use(requireAuth);
 
@@ -31,6 +42,31 @@ router.get("/", async (_req, res) => {
     res.json(links);
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch job links" });
+  }
+});
+
+router.post("/import", (req, res, next) => {
+  upload.single("file")(req, res, (err) => {
+    if (err instanceof multer.MulterError) {
+      if (err.code === "LIMIT_FILE_SIZE") {
+        return res.status(400).json({ message: "File too large (max 5 MB)" });
+      }
+      return res.status(400).json({ message: err.message });
+    }
+    if (err) return next(err);
+    next();
+  });
+}, async (req, res) => {
+  try {
+    if (!req.file?.buffer) {
+      return res.status(400).json({
+        message: "Upload an Excel file (.xlsx or .xls). Form field name must be \"file\"."
+      });
+    }
+    const result = await importJobLinksFromExcelBuffer(req.file.buffer, { userId: req.user.id });
+    res.status(200).json(result);
+  } catch (error) {
+    res.status(400).json({ message: "Import failed", error: error.message });
   }
 });
 

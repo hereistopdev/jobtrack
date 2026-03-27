@@ -67,6 +67,21 @@ export const fetchJobLinks = async () => {
   return res.json();
 };
 
+export const importJobLinksExcel = async (file) => {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/job-links/import`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: fd
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    throw new Error(data.message || data.error || `Import failed (${res.status})`);
+  }
+  return data;
+};
+
 export const createJobLink = async (payload) => {
   const res = await fetch(`${API_BASE_URL}/job-links`, {
     method: "POST",
@@ -150,6 +165,17 @@ export async function updateAdminUser(id, body) {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function adminBulkDeleteJobLinks(payload) {
+  const res = await fetch(`${API_BASE_URL}/admin/job-links/bulk-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(payload)
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
