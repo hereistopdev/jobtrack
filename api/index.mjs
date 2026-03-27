@@ -1,7 +1,3 @@
-import serverless from "serverless-http";
-import app from "../backend/src/app.js";
-import { connectDB } from "../backend/src/config/db.js";
-
 let handler;
 
 function isApiHealthRequest(req) {
@@ -21,8 +17,17 @@ export default async function vercelHandler(req, res) {
     return;
   }
 
+  // Dynamic imports keep /api/health cold starts tiny and let Mongo connect overlap Express load.
+  const { connectDB } = await import("../backend/src/config/db.js");
+  const connectPromise = connectDB();
+
+  const [{ default: app }, { default: serverless }] = await Promise.all([
+    import("../backend/src/app.js"),
+    import("serverless-http")
+  ]);
+
   try {
-    await connectDB();
+    await connectPromise;
   } catch (err) {
     console.error("connectDB failed:", err?.message || err);
     if (!res.headersSent) {
@@ -33,6 +38,7 @@ export default async function vercelHandler(req, res) {
     }
     return;
   }
+
   if (!handler) {
     handler = serverless(app);
   }

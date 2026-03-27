@@ -23,11 +23,9 @@ export async function connectDB() {
 
   const opts = {
     maxPoolSize: 5,
-    // Stay under Vercel’s function limit (often 10s on Hobby) so we fail fast instead of hanging
-    serverSelectionTimeoutMS: 6000,
-    connectTimeoutMS: 6000,
+    serverSelectionTimeoutMS: 5000,
+    connectTimeoutMS: 5000,
     socketTimeoutMS: 45000,
-    // Avoid long IPv6 fallback delays between some hosts and Atlas
     family: 4
   };
 

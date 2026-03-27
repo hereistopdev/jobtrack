@@ -7,7 +7,7 @@
     "api/index.mjs": {
       "includeFiles": "backend/src/**",
       "memory": 1024,
-      "maxDuration": 30
+      "maxDuration": 60
     }
   },
   "rewrites": [
