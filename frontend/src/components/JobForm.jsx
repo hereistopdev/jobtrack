@@ -1,29 +1,38 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { parseJobLinkFromUrl } from "../api";
 
-const initialForm = {
+const todayISO = () => new Date().toISOString().slice(0, 10);
+
+const emptyForm = () => ({
   company: "",
   title: "",
+  country: "",
   link: "",
-  date: "",
+  date: todayISO(),
   status: "Saved",
   notes: ""
-};
+});
 
 function JobForm({ onSubmit, editingItem, onCancelEdit }) {
-  const [form, setForm] = useState(initialForm);
+  const [form, setForm] = useState(emptyForm);
+  const [parsing, setParsing] = useState(false);
+  const lastParsedLinkRef = useRef("");
 
   useEffect(() => {
     if (editingItem) {
+      lastParsedLinkRef.current = "";
       setForm({
         company: editingItem.company || "",
         title: editingItem.title || "",
+        country: editingItem.country || "",
         link: editingItem.link || "",
-        date: editingItem.date ? new Date(editingItem.date).toISOString().slice(0, 10) : "",
+        date: editingItem.date ? new Date(editingItem.date).toISOString().slice(0, 10) : todayISO(),
         status: editingItem.status || "Saved",
         notes: editingItem.notes || ""
       });
     } else {
-      setForm(initialForm);
+      lastParsedLinkRef.current = "";
+      setForm(emptyForm());
     }
   }, [editingItem]);
 
@@ -32,11 +41,55 @@ function JobForm({ onSubmit, editingItem, onCancelEdit }) {
     setForm((prev) => ({ ...prev, [name]: value }));
   };
 
+  const applyParsed = (data) => {
+    setForm((prev) => ({
+      ...prev,
+      link: data.link || prev.link,
+      company: data.company?.trim() ? data.company.trim() : prev.company,
+      title: data.title?.trim() ? data.title.trim() : prev.title,
+      date: data.date || todayISO()
+    }));
+  };
+
+  const runParse = async (url) => {
+    const trimmed = url.trim();
+    if (!trimmed || editingItem) return;
+    if (!/^https?:\/\//i.test(trimmed)) return;
+    if (trimmed === lastParsedLinkRef.current) return;
+
+    setParsing(true);
+    try {
+      const data = await parseJobLinkFromUrl(trimmed);
+      lastParsedLinkRef.current = trimmed;
+      applyParsed(data);
+    } catch {
+      setForm((prev) => ({
+        ...prev,
+        link: trimmed,
+        date: prev.date || todayISO()
+      }));
+    } finally {
+      setParsing(false);
+    }
+  };
+
+  const handleLinkPaste = (e) => {
+    const text = e.clipboardData?.getData("text")?.trim();
+    if (!text || editingItem) return;
+    if (!/^https?:\/\//i.test(text)) return;
+    setTimeout(() => runParse(text), 0);
+  };
+
+  const handleLinkBlur = (e) => {
+    runParse(e.target.value);
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     await onSubmit(form);
     if (!editingItem) {
-      setForm(initialForm);
+      setForm(emptyForm());
+      lastParsedLinkRef.current = "";
     }
   };
 
@@ -44,19 +97,38 @@ function JobForm({ onSubmit, editingItem, onCancelEdit }) {
     <form className="card form-grid" onSubmit={handleSubmit}>
       <h2>{editingItem ? "Edit Job Link" : "Add Job Link"}</h2>
 
+      <label className="full-width">
+        Job link
+        <span className="field-hint">Paste a posting URL to autofill company and role (best effort).</span>
+        <input
+          name="link"
+          type="url"
+          value={form.link}
+          onChange={handleChange}
+          onPaste={handleLinkPaste}
+          onBlur={handleLinkBlur}
+          placeholder="https://..."
+          required
+          disabled={parsing}
+          autoComplete="off"
+        />
+        {parsing && <span className="inline-status">Reading page…</span>}
+      </label>
+
       <label>
         Company
         <input name="company" value={form.company} onChange={handleChange} required />
       </label>
 
       <label>
-        Job Title
+        Role
         <input name="title" value={form.title} onChange={handleChange} required />
       </label>
 
-      <label>
-        Job Link
-        <input name="link" type="url" value={form.link} onChange={handleChange} required />
+      <label className="full-width">
+        Country
+        <span className="field-hint">Used to detect duplicates (same country + role as another row). Optional.</span>
+        <input name="country" value={form.country} onChange={handleChange} placeholder="e.g. United States" />
       </label>
 
       <label>
@@ -81,7 +153,9 @@ function JobForm({ onSubmit, editingItem, onCancelEdit }) {
       </label>
 
       <div className="actions full-width">
-        <button type="submit">{editingItem ? "Update Link" : "Add Link"}</button>
+        <button type="submit" disabled={parsing}>
+          {editingItem ? "Update Link" : "Add Link"}
+        </button>
         {editingItem && (
           <button type="button" className="muted" onClick={onCancelEdit}>
             Cancel
