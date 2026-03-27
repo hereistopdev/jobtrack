@@ -3,7 +3,7 @@ function resolveApiBase() {
   if (v) return v.replace(/\/$/, "");
   if (import.meta.env.DEV) return "http://localhost:5000/api";
   throw new Error(
-    "VITE_API_BASE_URL is not set. In Vercel, add it (Production + Preview): your Render API origin with /api, e.g. https://jobtrack-api.onrender.com/api"
+    "VITE_API_BASE_URL is missing. Vercel: Project → Settings → Environment Variables → add VITE_API_BASE_URL = https://YOUR-SERVICE.onrender.com/api (enable for Production and Preview), then Redeploy. Vite bakes this in at build time."
   );
 }
 
