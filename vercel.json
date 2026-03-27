@@ -6,7 +6,6 @@
   "functions": {
     "api/index.mjs": {
       "includeFiles": "backend/src/**",
-      "memory": 1024,
       "maxDuration": 60
     }
   },
