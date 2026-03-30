@@ -6,6 +6,7 @@ import jobLinksRouter from "./routes/jobLinks.js";
 import adminUsersRouter from "./routes/adminUsers.js";
 import adminJobLinksRouter from "./routes/adminJobLinks.js";
 import analyticsRouter from "./routes/analytics.js";
+import financeRouter from "./routes/finance.js";
 
 const app = express();
 
@@ -30,5 +31,6 @@ app.use("/api/job-links", jobLinksRouter);
 app.use("/api/admin/users", adminUsersRouter);
 app.use("/api/admin/job-links", adminJobLinksRouter);
 app.use("/api/analytics", analyticsRouter);
+app.use("/api/finance", financeRouter);
 
 export default app;

@@ -181,3 +181,68 @@ export async function adminBulkDeleteJobLinks(payload) {
   if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
   return data;
 }
+
+export async function fetchFinanceSummary(options = {}) {
+  const q = new URLSearchParams();
+  if (options.owner != null && String(options.owner).trim() !== "") {
+    q.set("owner", String(options.owner).trim());
+  }
+  if (options.includeServiceIncomeRefs === false) {
+    q.set("includeServiceIncomeRefs", "0");
+  }
+  const suffix = q.toString() ? `?${q.toString()}` : "";
+  const res = await fetch(`${API_BASE_URL}/finance/summary${suffix}`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function fetchFinanceTransactions() {
+  const res = await fetch(`${API_BASE_URL}/finance/transactions`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function createFinanceTransaction(body) {
+  const res = await fetch(`${API_BASE_URL}/finance/transactions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function updateFinanceTransaction(id, body) {
+  const res = await fetch(`${API_BASE_URL}/finance/transactions/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function deleteFinanceTransaction(id) {
+  const res = await fetch(`${API_BASE_URL}/finance/transactions/${id}`, {
+    method: "DELETE",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function importFinanceExcel(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/finance/import`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: fd
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || `Import failed (${res.status})`);
+  return data;
+}

@@ -19,9 +19,14 @@ export default function AppLayout() {
             Analytics
           </NavLink>
           {isAdmin && (
-            <NavLink to="/users" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
-              Users
-            </NavLink>
+            <>
+              <NavLink to="/finance" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
+                Finance
+              </NavLink>
+              <NavLink to="/users" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
+                Users
+              </NavLink>
+            </>
           )}
         </nav>
         <div className="app-nav-spacer" />

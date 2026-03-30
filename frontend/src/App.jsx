@@ -5,6 +5,7 @@ import LoginForm from "./components/LoginForm";
 import DashboardPage from "./pages/DashboardPage";
 import AnalyticsPage from "./pages/AnalyticsPage";
 import UsersPage from "./pages/UsersPage";
+import FinancePage from "./pages/FinancePage";
 
 function App() {
   const { user, loading } = useAuth();
@@ -33,6 +34,10 @@ function App() {
         <Route
           path="/users"
           element={user.role === "admin" ? <UsersPage /> : <Navigate to="/" replace />}
+        />
+        <Route
+          path="/finance"
+          element={user.role === "admin" ? <FinancePage /> : <Navigate to="/" replace />}
         />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

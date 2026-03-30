@@ -6,6 +6,7 @@ function PaginationBar({
   totalFound,
   totalPages,
   totalInBoard,
+  boardTotalLabel = "total in board",
   onPageChange,
   onPageSizeChange
 }) {
@@ -21,7 +22,9 @@ function PaginationBar({
         {totalInBoard !== undefined && (
           <>
             {" "}
-            · <span className="pagination-total-board">{totalInBoard} total in board</span>
+            · <span className="pagination-total-board">
+              {totalInBoard} {boardTotalLabel}
+            </span>
           </>
         )}
         {totalFound > 0 && (
