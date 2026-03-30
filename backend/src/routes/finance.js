@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import { FinanceTransaction } from "../models/FinanceTransaction.js";
+import { User } from "../models/User.js";
 import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import {
   attachRunningBalances,
@@ -11,9 +12,39 @@ import {
 } from "../utils/financeSummary.js";
 import { importFinanceFromExcelBuffer } from "../utils/financeExcelImport.js";
 import { findDuplicateFinanceRow } from "../utils/duplicateFinanceTransaction.js";
+import { ledgerOwnerLabelFromUserDoc, normalizeOwnerName } from "../utils/financeOwnerIdentity.js";
 
 const router = express.Router();
-router.use(requireAuth, requireAdmin);
+router.use(requireAuth);
+
+async function attachFinanceViewer(req, res, next) {
+  try {
+    const user = await User.findById(req.user.id).lean();
+    if (!user) return res.status(401).json({ message: "User not found" });
+    const isAdmin = req.user.role === "admin";
+    const ledgerOwnerLabel = ledgerOwnerLabelFromUserDoc(user);
+    const normalizedOwner = normalizeOwnerName(ledgerOwnerLabel);
+    req.financeViewer = {
+      isAdmin,
+      ledgerOwnerLabel,
+      normalizedOwner,
+      canViewFinance: isAdmin || normalizedOwner.length > 0
+    };
+    next();
+  } catch (err) {
+    next(err);
+  }
+}
+
+function requireFinanceRead(_req, res, next) {
+  if (!_req.financeViewer.canViewFinance) {
+    return res.status(403).json({
+      message:
+        "Set your display name or ask an admin to set your Finance owner label (Users page) so it matches the ledger Owner column."
+    });
+  }
+  next();
+}
 
 const upload = multer({
   storage: multer.memoryStorage(),
@@ -35,10 +66,14 @@ function parseIncludeServiceIncomeRefs(req) {
   return true;
 }
 
-router.get("/summary", async (req, res) => {
+router.get("/summary", attachFinanceViewer, requireFinanceRead, async (req, res) => {
   try {
     const raw = await FinanceTransaction.find().sort({ date: 1, _id: 1 }).lean();
-    const ownerParam = String(req.query.owner ?? "").trim();
+    const v = req.financeViewer;
+    let ownerParam = String(req.query.owner ?? "").trim();
+    if (!v.isAdmin) {
+      ownerParam = v.ledgerOwnerLabel;
+    }
     const includeServiceIncomeRefs = parseIncludeServiceIncomeRefs(req);
     const dashOpts = { includeServiceIncomeRefs };
 
@@ -46,28 +81,39 @@ router.get("/summary", async (req, res) => {
     const forSummary = filterTransactionsForDashboard(forOwnerScope, dashOpts);
     const forByOwner = filterTransactionsForDashboard(raw, dashOpts);
 
+    let byOwner = buildByOwnerSummary(forByOwner);
+    if (!v.isAdmin) {
+      byOwner = byOwner.filter((row) => normalizeOwnerName(row.owner) === v.normalizedOwner);
+    }
+
     res.json({
       ...buildSummary(forSummary),
-      byOwner: buildByOwnerSummary(forByOwner),
+      byOwner,
       activeOwnerFilter: ownerParam || null,
-      includeServiceIncomeRefs
+      includeServiceIncomeRefs,
+      viewerScope: v.isAdmin ? "admin" : "own",
+      matchedLedgerOwner: v.ledgerOwnerLabel || null
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to build summary", error: error.message });
   }
 });
 
-router.get("/transactions", async (_req, res) => {
+router.get("/transactions", attachFinanceViewer, requireFinanceRead, async (_req, res) => {
   try {
     const raw = await FinanceTransaction.find().sort({ date: 1, _id: 1 }).lean();
-    const withBal = attachRunningBalances(raw);
+    const v = _req.financeViewer;
+    const scoped = v.isAdmin
+      ? raw
+      : raw.filter((t) => normalizeOwnerName(t.owner) === v.normalizedOwner);
+    const withBal = attachRunningBalances(scoped);
     res.json(withBal);
   } catch (error) {
     res.status(500).json({ message: "Failed to list transactions", error: error.message });
   }
 });
 
-router.post("/transactions", async (req, res) => {
+router.post("/transactions", requireAdmin, async (req, res) => {
   try {
     const { type, entryType, date, purpose, owner, ref, deposit, withdraw, txId, serviceEarnings } =
       req.body || {};
@@ -117,7 +163,7 @@ router.post("/transactions", async (req, res) => {
   }
 });
 
-router.patch("/transactions/:id", async (req, res) => {
+router.patch("/transactions/:id", requireAdmin, async (req, res) => {
   try {
     const { type, entryType, date, purpose, owner, ref, deposit, withdraw, txId, serviceEarnings } =
       req.body || {};
@@ -157,7 +203,7 @@ router.patch("/transactions/:id", async (req, res) => {
   }
 });
 
-router.delete("/transactions/:id", async (req, res) => {
+router.delete("/transactions/:id", requireAdmin, async (req, res) => {
   try {
     const doc = await FinanceTransaction.findByIdAndDelete(req.params.id);
     if (!doc) return res.status(404).json({ message: "Not found" });
@@ -178,7 +224,7 @@ router.post("/import", (req, res, next) => {
     if (err) return next(err);
     next();
   });
-}, async (req, res) => {
+}, requireAdmin, async (req, res) => {
   try {
     if (!req.file?.buffer) {
       return res.status(400).json({ message: "Upload .xlsx or .xls (field name: file)" });

@@ -18,6 +18,7 @@ import {
   updateFinanceTransaction
 } from "../api";
 import PaginationBar from "../components/PaginationBar";
+import { useAuth } from "../context/AuthContext";
 
 const money = (n) =>
   new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(
@@ -110,13 +111,9 @@ function rowMatchesFilters(row, f) {
   return true;
 }
 
-const FINANCE_DASH_TABS = [
-  { id: "dashboard", label: "Dashboard" },
-  { id: "entry", label: "Add & import" },
-  { id: "ledger", label: "Ledger" }
-];
-
 export default function FinancePage() {
+  const { user } = useAuth();
+  const isFinanceAdmin = user?.role === "admin";
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -136,9 +133,19 @@ export default function FinancePage() {
   const [dashTab, setDashTab] = useState("dashboard");
   const dashPanelRef = useRef(null);
 
+  const financeTabs = useMemo(() => {
+    const tabs = [
+      { id: "dashboard", label: "Dashboard" },
+      { id: "entry", label: "Add & import" },
+      { id: "ledger", label: "Ledger" }
+    ];
+    if (!isFinanceAdmin) return tabs.filter((t) => t.id !== "entry");
+    return tabs;
+  }, [isFinanceAdmin]);
+
   const load = useCallback(async () => {
     setError("");
-    const o = reportOwner.trim();
+    const o = isFinanceAdmin ? reportOwner.trim() : "";
     const [s, t] = await Promise.all([
       fetchFinanceSummary({
         ...(o ? { owner: o } : {}),
@@ -148,7 +155,11 @@ export default function FinancePage() {
     ]);
     setSummary(s);
     setTransactions(t);
-  }, [reportOwner, includeServiceIncomeRefs]);
+  }, [reportOwner, includeServiceIncomeRefs, isFinanceAdmin]);
+
+  useEffect(() => {
+    if (!isFinanceAdmin && dashTab === "entry") setDashTab("dashboard");
+  }, [isFinanceAdmin, dashTab]);
 
   useEffect(() => {
     let cancelled = false;
@@ -393,8 +404,9 @@ export default function FinancePage() {
         <div>
           <h1>Finance</h1>
           <p>
-            Team balance ledger (deposits &amp; withdrawals). Matches spreadsheet columns: Type, Date, Purpose, Owner,
-            ref, Deposit, Withdraw, TXid, Service earnings. Admin only.
+            Team balance ledger (deposits &amp; withdrawals). Your account <strong>name</strong> or admin-set{" "}
+            <strong>Finance owner</strong> label must match the ledger <strong>Owner</strong> column to view your rows.
+            {isFinanceAdmin ? " Admins see and edit everything." : " You can view your own rows only."}
           </p>
         </div>
       </header>
@@ -416,22 +428,28 @@ export default function FinancePage() {
               <>
                 <section className="card finance-report-owner-card">
                   <div className="finance-report-owner-row">
-                    <label className="finance-report-owner-label">
-                      Reports by owner
-                      <select
-                        className="finance-report-owner-select"
-                        value={reportOwner}
-                        onChange={(e) => setReportOwner(e.target.value)}
-                        aria-label="Filter finance reports by owner"
-                      >
-                        <option value="">All owners</option>
-                        {ownerReportOptions.map((name) => (
-                          <option key={name} value={name}>
-                            {name}
-                          </option>
-                        ))}
-                      </select>
-                    </label>
+                    {isFinanceAdmin ? (
+                      <label className="finance-report-owner-label">
+                        Reports by owner
+                        <select
+                          className="finance-report-owner-select"
+                          value={reportOwner}
+                          onChange={(e) => setReportOwner(e.target.value)}
+                          aria-label="Filter finance reports by owner"
+                        >
+                          <option value="">All owners</option>
+                          {ownerReportOptions.map((name) => (
+                            <option key={name} value={name}>
+                              {name}
+                            </option>
+                          ))}
+                        </select>
+                      </label>
+                    ) : (
+                      <p className="finance-viewer-owner-label">
+                        Your ledger owner: <strong>{summary.matchedLedgerOwner || "—"}</strong>
+                      </p>
+                    )}
                     <label className="finance-dashboard-checkbox-label">
                       <input
                         type="checkbox"
@@ -450,7 +468,10 @@ export default function FinancePage() {
                     Dashboard totals (cards, chart, and by-owner below) use the same rules: rows for{" "}
                     <strong>Dustin Lee</strong> count only when <strong>ref</strong> is filled. Uncheck &quot;Include
                     service &amp; income&quot; to omit lines whose ref is categorized as Service, Income, Service
-                    earnings, etc. The ledger tab still shows every row.
+                    earnings, etc.
+                    {isFinanceAdmin
+                      ? " The ledger tab lists every row."
+                      : " Your ledger tab lists only rows that match your account owner."}
                   </p>
                 </section>
 
@@ -541,8 +562,16 @@ export default function FinancePage() {
                   <h2>By owner</h2>
                   <p className="field-hint">
                     Same dashboard rules as the cards and chart (Dustin Lee: ref required; optional service/income ref
-                    exclusion). <strong>View</strong> sets the owner filter above; <strong>Ledger</strong> opens the
-                    ledger with the Owner column filtered.
+                    exclusion).
+                    {isFinanceAdmin ? (
+                      <>
+                        {" "}
+                        <strong>View</strong> sets the owner filter above; <strong>Ledger</strong> opens the ledger with
+                        the Owner column filtered.
+                      </>
+                    ) : (
+                      <> Only your row is shown.</>
+                    )}
                   </p>
                   <div className="table-wrap finance-by-owner-wrap">
                     <table className="data-table finance-by-owner-table">
@@ -576,6 +605,7 @@ export default function FinancePage() {
                               <td className={row.net >= 0 ? "finance-net-pos" : "finance-net-neg"}>{money(row.net)}</td>
                               <td>{row.transactionCount}</td>
                               <td className="cell-actions">
+                              {isFinanceAdmin && (
                                 <button
                                   type="button"
                                   className="small muted"
@@ -586,16 +616,17 @@ export default function FinancePage() {
                                 >
                                   View
                                 </button>
-                                <button
-                                  type="button"
-                                  className="small muted"
-                                  onClick={() => {
-                                    setColumnFilters((prev) => ({ ...prev, owner: row.owner }));
-                                    setDashTab("ledger");
-                                  }}
-                                >
-                                  Ledger
-                                </button>
+                              )}
+                              <button
+                                type="button"
+                                className="small muted"
+                                onClick={() => {
+                                  setColumnFilters((prev) => ({ ...prev, owner: row.owner }));
+                                  setDashTab("ledger");
+                                }}
+                              >
+                                Ledger
+                              </button>
                               </td>
                             </tr>
                           ))
@@ -890,12 +921,16 @@ export default function FinancePage() {
                       </td>
                       <td className="cell-ellipsis">{row.serviceEarnings || "—"}</td>
                       <td className="cell-actions">
-                        <button type="button" className="small muted" onClick={() => startEdit(row)}>
-                          Edit
-                        </button>
-                        <button type="button" className="small danger" onClick={() => handleDelete(row._id)}>
-                          Del
-                        </button>
+                        {isFinanceAdmin && (
+                          <>
+                            <button type="button" className="small muted" onClick={() => startEdit(row)}>
+                              Edit
+                            </button>
+                            <button type="button" className="small danger" onClick={() => handleDelete(row._id)}>
+                              Del
+                            </button>
+                          </>
+                        )}
                       </td>
                     </tr>
                   ))}
@@ -908,7 +943,7 @@ export default function FinancePage() {
 
           <nav className="finance-dash-tabs-nav" aria-label="Finance dashboards">
             <div className="finance-dash-tabs-rail" role="tablist" aria-orientation="vertical">
-              {FINANCE_DASH_TABS.map((tab) => (
+              {financeTabs.map((tab) => (
                 <button
                   key={tab.id}
                   type="button"

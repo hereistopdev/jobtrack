@@ -47,6 +47,21 @@ export default function UsersPage() {
     }
   };
 
+  const handleFinanceOwnerBlur = async (u, value) => {
+    const next = value.trim();
+    const cur = (u.financeOwnerLabel || "").trim();
+    if (next === cur) return;
+    setSavingId(u._id);
+    try {
+      const updated = await updateAdminUser(u._id, { financeOwnerLabel: next });
+      setUsers((prev) => prev.map((row) => (row._id === updated._id ? updated : row)));
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setSavingId(null);
+    }
+  };
+
   const toggleUserFilter = (id) => {
     setSelectedUserIds((prev) => {
       const next = new Set(prev);
@@ -107,7 +122,10 @@ export default function UsersPage() {
       <header className="page-header page-header-row">
         <div>
           <h1>Users</h1>
-          <p>Manage accounts and roles. Admins can edit or delete any job link.</p>
+          <p>
+            Manage accounts and roles. Set <strong>Finance owner</strong> so it matches the ledger &quot;Owner&quot;
+            column (1:1 with the account); overrides display name when set.
+          </p>
         </div>
       </header>
 
@@ -122,6 +140,7 @@ export default function UsersPage() {
                 <tr>
                   <th className="th-email">Email</th>
                   <th className="th-name">Name</th>
+                  <th className="th-finance-owner">Finance owner (ledger)</th>
                   <th className="th-role">Role</th>
                   <th className="th-date">Joined</th>
                 </tr>
@@ -134,6 +153,18 @@ export default function UsersPage() {
                     </td>
                     <td className="cell-ellipsis" title={u.name || ""}>
                       {u.name || "—"}
+                    </td>
+                    <td>
+                      <input
+                        type="text"
+                        className="users-finance-owner-input"
+                        defaultValue={u.financeOwnerLabel || ""}
+                        placeholder="Same as ledger Owner"
+                        title="Optional. When set, matches Finance Owner column instead of Name"
+                        disabled={savingId === u._id}
+                        onBlur={(e) => handleFinanceOwnerBlur(u, e.target.value)}
+                        aria-label={`Finance owner label for ${u.email}`}
+                      />
                     </td>
                     <td>
                       <select

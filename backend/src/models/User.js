@@ -18,6 +18,12 @@ const userSchema = new mongoose.Schema(
       trim: true,
       default: ""
     },
+    /** When set, Finance ledger Owner column matches this instead of `name` (1:1 with registered user). */
+    financeOwnerLabel: {
+      type: String,
+      trim: true,
+      default: ""
+    },
     role: {
       type: String,
       enum: ["user", "admin"],

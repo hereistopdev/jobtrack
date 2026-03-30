@@ -37,7 +37,9 @@ function App() {
         />
         <Route
           path="/finance"
-          element={user.role === "admin" ? <FinancePage /> : <Navigate to="/" replace />}
+          element={
+            user.role === "admin" || user.financeAccess ? <FinancePage /> : <Navigate to="/" replace />
+          }
         />
       </Route>
       <Route path="*" element={<Navigate to="/" replace />} />

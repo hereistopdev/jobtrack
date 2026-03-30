@@ -2,17 +2,23 @@ import bcrypt from "bcryptjs";
 import express from "express";
 import { User } from "../models/User.js";
 import { requireAuth, signToken } from "../middleware/auth.js";
+import { ledgerOwnerLabelFromUserDoc, normalizeOwnerName } from "../utils/financeOwnerIdentity.js";
 
 const router = express.Router();
 
 const SALT_ROUNDS = 12;
 
 function publicUser(user) {
+  const ledger = ledgerOwnerLabelFromUserDoc(user);
+  const financeAccess =
+    user.role === "admin" || normalizeOwnerName(ledger).length > 0;
   return {
     id: user._id.toString(),
     email: user.email,
     name: user.name || "",
-    role: user.role
+    role: user.role,
+    financeAccess,
+    financeOwnerLabel: user.financeOwnerLabel || ""
   };
 }
 

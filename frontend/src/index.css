@@ -1011,7 +1011,21 @@ th {
 }
 
 .users-table .th-name {
-  width: 18%;
+  width: 14%;
+}
+
+.users-table .th-finance-owner {
+  width: 16%;
+  min-width: 10rem;
+}
+
+.users-finance-owner-input {
+  width: 100%;
+  max-width: 14rem;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  border: 1px solid #d1d5db;
+  border-radius: 5px;
 }
 
 .users-table .th-role {
@@ -1523,6 +1537,12 @@ th {
   margin: 0;
   font-size: 0.875rem;
   color: #374151;
+}
+
+.finance-viewer-owner-label {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #1f2937;
 }
 
 .finance-report-owner-hint {

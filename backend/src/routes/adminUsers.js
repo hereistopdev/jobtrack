@@ -17,11 +17,14 @@ router.get("/", async (_req, res) => {
 
 router.patch("/:id", async (req, res) => {
   try {
-    const { name, role } = req.body || {};
+    const { name, role, financeOwnerLabel } = req.body || {};
     const updates = {};
 
     if (typeof name === "string") {
       updates.name = name.trim();
+    }
+    if (typeof financeOwnerLabel === "string") {
+      updates.financeOwnerLabel = financeOwnerLabel.trim();
     }
     if (role !== undefined) {
       if (!["user", "admin"].includes(role)) {
