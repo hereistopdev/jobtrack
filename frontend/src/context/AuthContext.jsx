@@ -58,6 +58,13 @@ export function AuthProvider({ children }) {
     setUser(null);
   }, []);
 
+  const refreshUser = useCallback(async () => {
+    const t = localStorage.getItem(TOKEN_KEY);
+    if (!t) return;
+    const u = await fetchMe(t);
+    setUser(u);
+  }, []);
+
   const value = useMemo(
     () => ({
       token,
@@ -66,9 +73,10 @@ export function AuthProvider({ children }) {
       isAuthenticated: Boolean(token && user),
       login,
       register,
-      logout
+      logout,
+      refreshUser
     }),
-    [token, user, loading, login, register, logout]
+    [token, user, loading, login, register, logout, refreshUser]
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

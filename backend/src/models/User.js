@@ -28,6 +28,17 @@ const userSchema = new mongoose.Schema(
       type: String,
       enum: ["user", "admin"],
       default: "user"
+    },
+    /** Saved labels for interview "Profile" when logging (each user maintains their own list). */
+    interviewProfiles: {
+      type: [String],
+      default: [],
+      validate: {
+        validator(arr) {
+          return Array.isArray(arr) && arr.length <= 40;
+        },
+        message: "At most 40 profile labels"
+      }
     }
   },
   { timestamps: true }

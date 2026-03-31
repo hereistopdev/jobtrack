@@ -10,6 +10,7 @@ import {
   YAxis
 } from "recharts";
 import {
+  bulkDeleteFinanceTransactions,
   createFinanceTransaction,
   deleteFinanceTransaction,
   fetchFinanceSummary,
@@ -19,6 +20,8 @@ import {
 } from "../api";
 import PaginationBar from "../components/PaginationBar";
 import { useAuth } from "../context/AuthContext";
+import { useTeamDirectory } from "../hooks/useTeamDirectory";
+import { exportFinanceByOwnerToXlsx, exportFinanceLedgerToXlsx } from "../utils/exportXlsx";
 
 const money = (n) =>
   new Intl.NumberFormat(undefined, { style: "currency", currency: "USD", maximumFractionDigits: 2 }).format(
@@ -113,6 +116,7 @@ function rowMatchesFilters(row, f) {
 
 export default function FinancePage() {
   const { user } = useAuth();
+  const { members: teamMembers } = useTeamDirectory();
   const isFinanceAdmin = user?.role === "admin";
   const [summary, setSummary] = useState(null);
   const [transactions, setTransactions] = useState([]);
@@ -132,6 +136,9 @@ export default function FinancePage() {
   const [includeServiceIncomeRefs, setIncludeServiceIncomeRefs] = useState(true);
   const [dashTab, setDashTab] = useState("dashboard");
   const dashPanelRef = useRef(null);
+  const ledgerSelectAllRef = useRef(null);
+  const [ownerQuickPick, setOwnerQuickPick] = useState("");
+  const [selectedLedgerIds, setSelectedLedgerIds] = useState(() => new Set());
 
   const financeTabs = useMemo(() => {
     const tabs = [
@@ -201,6 +208,21 @@ export default function FinancePage() {
       return a.localeCompare(b);
     });
   }, [summary?.byOwner]);
+
+  /** Ledger-derived owners plus every teammate's ledger owner string (for dashboard filter). */
+  const reportOwnerSelectOptions = useMemo(() => {
+    const set = new Set(ownerReportOptions);
+    for (const m of teamMembers) {
+      const o = (m.ownerLabel || "").trim();
+      if (o) set.add(o);
+      else if ((m.displayName || "").trim()) set.add(m.displayName.trim());
+    }
+    return [...set].sort((a, b) => {
+      if (a === "(no owner)") return 1;
+      if (b === "(no owner)") return -1;
+      return a.localeCompare(b);
+    });
+  }, [ownerReportOptions, teamMembers]);
 
   const byOwnerReportRows = useMemo(() => {
     return [...(summary?.byOwner || [])].sort((a, b) => b.net - a.net || a.owner.localeCompare(b.owner));
@@ -280,6 +302,16 @@ export default function FinancePage() {
     () => filteredSortedTransactions.slice(pageStart, pageStart + pageSize),
     [filteredSortedTransactions, pageStart, pageSize]
   );
+
+  const pageLedgerIds = useMemo(() => paginatedTransactions.map((r) => String(r._id)), [paginatedTransactions]);
+  const allPageLedgerSelected =
+    pageLedgerIds.length > 0 && pageLedgerIds.every((id) => selectedLedgerIds.has(id));
+  const somePageLedgerSelected = pageLedgerIds.some((id) => selectedLedgerIds.has(id));
+
+  useEffect(() => {
+    const el = ledgerSelectAllRef.current;
+    if (el) el.indeterminate = somePageLedgerSelected && !allPageLedgerSelected;
+  }, [somePageLedgerSelected, allPageLedgerSelected]);
 
   useEffect(() => {
     setPage(1);
@@ -370,11 +402,58 @@ export default function FinancePage() {
     if (!window.confirm("Delete this ledger row?")) return;
     try {
       await deleteFinanceTransaction(id);
+      setSelectedLedgerIds((prev) => {
+        const next = new Set(prev);
+        next.delete(String(id));
+        return next;
+      });
       if (editingId === id) resetForm();
       await load();
     } catch (err) {
       setError(err.message);
     }
+  };
+
+  const handleBulkDeleteSelected = async () => {
+    const ids = [...selectedLedgerIds];
+    if (!ids.length) return;
+    if (
+      !window.confirm(
+        `Permanently delete ${ids.length} selected ledger row(s)? This cannot be undone.`
+      )
+    ) {
+      return;
+    }
+    try {
+      await bulkDeleteFinanceTransactions(ids);
+      setSelectedLedgerIds(new Set());
+      if (editingId && ids.includes(String(editingId))) resetForm();
+      await load();
+    } catch (err) {
+      setError(err.message);
+    }
+  };
+
+  const toggleLedgerRowSelected = (id) => {
+    const sid = String(id);
+    setSelectedLedgerIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(sid)) next.delete(sid);
+      else next.add(sid);
+      return next;
+    });
+  };
+
+  const toggleSelectAllLedgerPage = () => {
+    setSelectedLedgerIds((prev) => {
+      const next = new Set(prev);
+      if (allPageLedgerSelected) {
+        pageLedgerIds.forEach((id) => next.delete(id));
+      } else {
+        pageLedgerIds.forEach((id) => next.add(id));
+      }
+      return next;
+    });
   };
 
   const handleImport = async (e) => {
@@ -438,7 +517,7 @@ export default function FinancePage() {
                           aria-label="Filter finance reports by owner"
                         >
                           <option value="">All owners</option>
-                          {ownerReportOptions.map((name) => (
+                          {reportOwnerSelectOptions.map((name) => (
                             <option key={name} value={name}>
                               {name}
                             </option>
@@ -559,7 +638,17 @@ export default function FinancePage() {
                 </section>
 
                 <section className="card finance-by-owner-card">
-                  <h2>By owner</h2>
+                  <div className="table-card-head-row">
+                    <h2 className="table-card-title">By owner</h2>
+                    <button
+                      type="button"
+                      className="small muted table-export-btn"
+                      disabled={byOwnerReportRows.length === 0}
+                      onClick={() => exportFinanceByOwnerToXlsx(byOwnerReportRows, "finance-by-owner")}
+                    >
+                      Export XLSX
+                    </button>
+                  </div>
                   <p className="field-hint">
                     Same dashboard rules as the cards and chart (Dustin Lee: ref required; optional service/income ref
                     exclusion).
@@ -655,6 +744,30 @@ export default function FinancePage() {
                       Purpose
                       <input name="purpose" value={form.purpose} onChange={handleFormChange} />
                     </label>
+                    <label className="full-width">
+                      Owner — quick pick (team)
+                      <select
+                        value={ownerQuickPick}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          if (v) setForm((prev) => ({ ...prev, owner: v }));
+                          setOwnerQuickPick("");
+                        }}
+                        aria-label="Set owner from team roster"
+                      >
+                        <option value="">— Choose teammate —</option>
+                        {teamMembers.map((m) => {
+                          const v = (m.ownerLabel || "").trim() || (m.displayName || "").trim();
+                          if (!v) return null;
+                          return (
+                            <option key={m.id} value={v}>
+                              {m.displayName}
+                              {m.ownerLabel && m.ownerLabel !== m.displayName ? ` → ${m.ownerLabel}` : ""}
+                            </option>
+                          );
+                        })}
+                      </select>
+                    </label>
                     <label>
                       Owner
                       <input name="owner" value={form.owner} onChange={handleFormChange} />
@@ -722,11 +835,31 @@ export default function FinancePage() {
                 Ledger ({filteredSortedTransactions.length}
                 {hasActiveFilters ? ` of ${transactions.length}` : ""})
               </h2>
-              {hasActiveFilters && (
-                <button type="button" className="small muted finance-clear-filters" onClick={clearColumnFilters}>
-                  Clear column filters
+              <div className="finance-table-card-actions">
+                {hasActiveFilters && (
+                  <button type="button" className="small muted finance-clear-filters" onClick={clearColumnFilters}>
+                    Clear column filters
+                  </button>
+                )}
+                {isFinanceAdmin && (
+                  <button
+                    type="button"
+                    className="small danger"
+                    disabled={selectedLedgerIds.size === 0}
+                    onClick={handleBulkDeleteSelected}
+                  >
+                    Delete selected ({selectedLedgerIds.size})
+                  </button>
+                )}
+                <button
+                  type="button"
+                  className="small muted table-export-btn"
+                  disabled={filteredSortedTransactions.length === 0}
+                  onClick={() => exportFinanceLedgerToXlsx(filteredSortedTransactions, "finance-ledger")}
+                >
+                  Export XLSX
                 </button>
-              )}
+              </div>
             </div>
             <p className="field-hint">
               Running balance is computed on the full ledger in date order. Filtered rows still show each line&apos;s
@@ -749,6 +882,17 @@ export default function FinancePage() {
               <table className="data-table finance-data-table">
                 <thead>
                   <tr>
+                    {isFinanceAdmin && (
+                      <th scope="col" className="finance-th-select" aria-label="Select all on page">
+                        <input
+                          ref={ledgerSelectAllRef}
+                          type="checkbox"
+                          checked={allPageLedgerSelected}
+                          onChange={toggleSelectAllLedgerPage}
+                          aria-label="Select all rows on this page"
+                        />
+                      </th>
+                    )}
                     <th scope="col" className="finance-th-num" aria-label="Row number">
                       #
                     </th>
@@ -783,6 +927,7 @@ export default function FinancePage() {
                     <th scope="col" className="finance-th-actions" />
                   </tr>
                   <tr className="finance-filter-row">
+                    {isFinanceAdmin && <th className="finance-th-select" aria-hidden />}
                     <th className="finance-th-num" aria-hidden />
                     <th>
                       <input
@@ -890,13 +1035,23 @@ export default function FinancePage() {
                 <tbody>
                   {filteredSortedTransactions.length === 0 && (
                     <tr>
-                      <td colSpan={12} className="finance-table-empty">
+                      <td colSpan={isFinanceAdmin ? 13 : 12} className="finance-table-empty">
                         {transactions.length === 0 ? "No ledger rows yet." : "No rows match the column filters."}
                       </td>
                     </tr>
                   )}
                   {paginatedTransactions.map((row, i) => (
                     <tr key={row._id}>
+                      {isFinanceAdmin && (
+                        <td className="finance-td-select">
+                          <input
+                            type="checkbox"
+                            checked={selectedLedgerIds.has(String(row._id))}
+                            onChange={() => toggleLedgerRowSelected(row._id)}
+                            aria-label={`Select row ${pageStart + i + 1}`}
+                          />
+                        </td>
+                      )}
                       <td className="finance-row-num">{pageStart + i + 1}</td>
                       <td className="cell-ellipsis" title={row.entryType}>
                         {row.entryType}

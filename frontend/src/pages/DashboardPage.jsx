@@ -13,6 +13,7 @@ import ExcelImportCard from "../components/ExcelImportCard";
 import JobTable from "../components/JobTable";
 import PaginationBar from "../components/PaginationBar";
 import { defaultLast7DayRange } from "../utils/dateRange";
+import { exportJobLinksToXlsx } from "../utils/exportXlsx";
 
 function canModifyRow(item, user) {
   if (!user) return false;
@@ -388,6 +389,16 @@ export default function DashboardPage() {
                 sortKey={sort.key}
                 sortDir={sort.dir}
                 onSort={toggleSort}
+                headerExtra={
+                  <button
+                    type="button"
+                    className="small muted table-export-btn"
+                    disabled={sortedFilteredLinks.length === 0}
+                    onClick={() => exportJobLinksToXlsx(sortedFilteredLinks, "job-links")}
+                  >
+                    Export XLSX
+                  </button>
+                }
               />
             </>
           )}

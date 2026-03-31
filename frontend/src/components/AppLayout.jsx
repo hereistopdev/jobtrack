@@ -18,6 +18,9 @@ export default function AppLayout() {
           <NavLink to="/analytics" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
             Analytics
           </NavLink>
+          <NavLink to="/interviews" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
+            Interviews
+          </NavLink>
           {(isAdmin || user?.financeAccess) && (
             <NavLink to="/finance" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
               Finance

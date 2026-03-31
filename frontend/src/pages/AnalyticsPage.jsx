@@ -15,6 +15,7 @@ import {
   YAxis
 } from "recharts";
 import { fetchAnalyticsSummary } from "../api";
+import { exportAnalyticsToXlsx } from "../utils/exportXlsx";
 
 const COLORS = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2", "#db2777", "#4f46e5"];
 
@@ -71,6 +72,18 @@ export default function AnalyticsPage() {
           <h1>Analytics</h1>
           <p>Who added job links over time, and status mix.</p>
         </div>
+        {data && !loading && (
+          <button
+            type="button"
+            className="small muted table-export-btn"
+            disabled={
+              !(data.byUser?.length || data.byMonth?.length || data.statusBreakdown?.length)
+            }
+            onClick={() => exportAnalyticsToXlsx(data, "analytics")}
+          >
+            Export XLSX
+          </button>
+        )}
       </header>
 
       {loading && <div className="card">Loading analytics…</div>}

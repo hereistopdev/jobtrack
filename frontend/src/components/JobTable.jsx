@@ -31,7 +31,9 @@ function JobTable({
   onRemoveInterview,
   sortKey,
   sortDir,
-  onSort
+  onSort,
+  title = "Team Job Links",
+  headerExtra = null
 }) {
   const sortable = typeof onSort === "function" && sortKey != null && sortDir != null;
 
@@ -52,7 +54,10 @@ function JobTable({
 
   return (
     <div className="card table-card">
-      <h2 className="table-card-title">Team Job Links</h2>
+      <div className="table-card-head-row">
+        <h2 className="table-card-title">{title}</h2>
+        {headerExtra}
+      </div>
       <div className="table-wrap">
         <table className="data-table">
           <thead>

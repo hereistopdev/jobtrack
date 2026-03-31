@@ -12,13 +12,17 @@ function publicUser(user) {
   const ledger = ledgerOwnerLabelFromUserDoc(user);
   const financeAccess =
     user.role === "admin" || normalizeOwnerName(ledger).length > 0;
+  const profiles = Array.isArray(user.interviewProfiles)
+    ? [...new Set(user.interviewProfiles.map((s) => String(s ?? "").trim()).filter(Boolean))].slice(0, 40)
+    : [];
   return {
     id: user._id.toString(),
     email: user.email,
     name: user.name || "",
     role: user.role,
     financeAccess,
-    financeOwnerLabel: user.financeOwnerLabel || ""
+    financeOwnerLabel: user.financeOwnerLabel || "",
+    interviewProfiles: profiles
   };
 }
 
@@ -89,6 +93,38 @@ router.get("/me", requireAuth, async (req, res) => {
     res.json(publicUser(user));
   } catch (error) {
     res.status(500).json({ message: "Failed to load profile", error: error.message });
+  }
+});
+
+router.patch("/me", requireAuth, async (req, res) => {
+  try {
+    const { interviewProfiles } = req.body || {};
+    if (interviewProfiles === undefined) {
+      return res.status(400).json({ message: "interviewProfiles is required (array of strings)" });
+    }
+    if (!Array.isArray(interviewProfiles)) {
+      return res.status(400).json({ message: "interviewProfiles must be an array" });
+    }
+    const cleaned = [
+      ...new Set(
+        interviewProfiles
+          .map((s) => String(s ?? "").trim())
+          .filter(Boolean)
+          .map((s) => s.slice(0, 120))
+      )
+    ].slice(0, 40);
+
+    const user = await User.findByIdAndUpdate(
+      req.user.id,
+      { $set: { interviewProfiles: cleaned } },
+      { new: true }
+    ).select("-passwordHash");
+    if (!user) {
+      return res.status(404).json({ message: "User not found" });
+    }
+    res.json(publicUser(user));
+  } catch (error) {
+    res.status(400).json({ message: "Failed to update profile", error: error.message });
   }
 });
 

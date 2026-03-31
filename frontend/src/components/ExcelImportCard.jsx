@@ -1,5 +1,6 @@
 import { useId, useState } from "react";
 import { importJobLinksExcel } from "../api";
+import { exportJobImportFormatToXlsx } from "../utils/exportXlsx";
 
 export default function ExcelImportCard({ onImported }) {
   const inputId = useId();
@@ -95,6 +96,15 @@ export default function ExcelImportCard({ onImported }) {
               </tr>
             </tbody>
           </table>
+          <p className="excel-import-format-export">
+            <button
+              type="button"
+              className="small muted table-export-btn"
+              onClick={() => exportJobImportFormatToXlsx()}
+            >
+              Export this table (XLSX)
+            </button>
+          </p>
           <p className="field-hint">
             Duplicate rules match the form: same normalized URL, or same country + role as an existing row, are skipped
             and listed below.

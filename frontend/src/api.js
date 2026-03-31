@@ -49,6 +49,24 @@ export async function fetchMe(token) {
   return res.json();
 }
 
+/** Replace saved interview profile labels for the current user (used for datalist suggestions). */
+export async function fetchTeamDirectory() {
+  const res = await fetch(`${API_BASE_URL}/users/directory`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function patchMyInterviewProfiles(interviewProfiles) {
+  const res = await fetch(`${API_BASE_URL}/auth/me`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ interviewProfiles })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
 export const parseJobLinkFromUrl = async (url) => {
   const res = await fetch(`${API_BASE_URL}/job-links/parse`, {
     method: "POST",
@@ -234,10 +252,79 @@ export async function deleteFinanceTransaction(id) {
   return data;
 }
 
+/** Admin only: delete many ledger rows by id. */
+export async function bulkDeleteFinanceTransactions(ids) {
+  const res = await fetch(`${API_BASE_URL}/finance/transactions/bulk-delete`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ ids })
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
 export async function importFinanceExcel(file) {
   const fd = new FormData();
   fd.append("file", file);
   const res = await fetch(`${API_BASE_URL}/finance/import`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: fd
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || data.error || `Import failed (${res.status})`);
+  return data;
+}
+
+export async function fetchInterviewSummary() {
+  const res = await fetch(`${API_BASE_URL}/interviews/summary`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function fetchInterviewRecords() {
+  const res = await fetch(`${API_BASE_URL}/interviews`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function createInterviewRecord(body) {
+  const res = await fetch(`${API_BASE_URL}/interviews`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function updateInterviewRecord(id, body) {
+  const res = await fetch(`${API_BASE_URL}/interviews/${id}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function deleteInterviewRecord(id) {
+  const res = await fetch(`${API_BASE_URL}/interviews/${id}`, {
+    method: "DELETE",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function importInterviewExcel(file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/interviews/import`, {
     method: "POST",
     headers: { ...authHeaders() },
     body: fd

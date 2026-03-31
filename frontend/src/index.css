@@ -82,6 +82,38 @@ body {
   margin-bottom: 0;
 }
 
+.table-card-head-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+
+.table-card-head-row .table-card-title {
+  margin: 0;
+}
+
+.table-export-btn {
+  flex-shrink: 0;
+}
+
+.finance-table-card-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.finance-by-owner-card .table-card-head-row {
+  margin-bottom: 6px;
+}
+
+.excel-import-format-export {
+  margin: 10px 0 0;
+}
+
 .user-bar {
   display: flex;
   flex-wrap: wrap;
@@ -1644,6 +1676,157 @@ th {
   margin: 10px 0 0;
 }
 
+.page-header-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.interviews-form-card .interviews-form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px 14px;
+  margin-top: 10px;
+}
+
+.interviews-form-card .interviews-form-grid .form-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.interviews-form-card .interviews-form-grid .form-field span {
+  font-size: 0.8rem;
+  color: #4b5563;
+}
+
+.interviews-form-card .interviews-form-grid .form-field input,
+.interviews-form-card .interviews-form-grid .form-field textarea {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.interviews-form-card .interviews-form-grid .form-field-span2 {
+  grid-column: 1 / -1;
+}
+
+.interviews-form-card .interviews-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+@media (max-width: 640px) {
+  .interviews-form-card .interviews-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.interviews-page .table-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.interviews-page .table-search {
+  flex: 1;
+  min-width: 200px;
+  max-width: 420px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font: inherit;
+}
+
+.interviews-page .table-meta {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.interviews-page .table-scroll {
+  overflow-x: auto;
+}
+
+.interviews-page .muted-cell {
+  color: #6b7280;
+  font-size: 0.9rem;
+}
+
+.interviews-page .table-actions {
+  white-space: nowrap;
+}
+
+.interviews-page .table-actions button + button {
+  margin-left: 6px;
+}
+
+.interviews-page .table-empty {
+  padding: 16px;
+  color: #6b7280;
+  margin: 0;
+}
+
+.interviews-per-user-card {
+  margin-bottom: 16px;
+}
+
+.interviews-per-user-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.interviews-per-user-head .table-card-title {
+  margin: 0;
+}
+
+.interviews-per-user-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 200px;
+}
+
+.interviews-per-user-select select {
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font: inherit;
+  max-width: 320px;
+}
+
+.interviews-per-user-charts {
+  margin-top: 4px;
+}
+
+.interviews-inner-chart {
+  background: transparent;
+  border: none;
+  padding: 0;
+  box-shadow: none;
+  margin: 0;
+}
+
+.interviews-subchart-title {
+  margin: 0 0 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #374151;
+}
+
 .finance-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1713,6 +1896,18 @@ th {
   font-size: 0.7rem;
   border: 1px solid #d1d5db;
   border-radius: 4px;
+}
+
+.finance-data-table .finance-th-select,
+.finance-data-table .finance-td-select {
+  width: 2rem;
+  text-align: center;
+  vertical-align: middle;
+}
+
+.finance-data-table .finance-th-select input,
+.finance-data-table .finance-td-select input {
+  cursor: pointer;
 }
 
 .finance-data-table .finance-th-actions {

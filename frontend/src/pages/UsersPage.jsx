@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { adminBulkDeleteJobLinks, fetchAdminUsers, updateAdminUser } from "../api";
+import { exportUsersToXlsx } from "../utils/exportXlsx";
 
 const CONFIRM_PHRASE = "DELETE_JOB_LINKS";
 
@@ -127,6 +128,15 @@ export default function UsersPage() {
             column (1:1 with the account); overrides display name when set.
           </p>
         </div>
+        {!loading && users.length > 0 && (
+          <button
+            type="button"
+            className="small muted table-export-btn"
+            onClick={() => exportUsersToXlsx(users, "users")}
+          >
+            Export XLSX
+          </button>
+        )}
       </header>
 
       {error && <div className="card error">{error}</div>}

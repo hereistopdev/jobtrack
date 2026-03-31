@@ -1,4 +1,5 @@
 import express from "express";
+import mongoose from "mongoose";
 import multer from "multer";
 import { FinanceTransaction } from "../models/FinanceTransaction.js";
 import { User } from "../models/User.js";
@@ -110,6 +111,30 @@ router.get("/transactions", attachFinanceViewer, requireFinanceRead, async (_req
     res.json(withBal);
   } catch (error) {
     res.status(500).json({ message: "Failed to list transactions", error: error.message });
+  }
+});
+
+router.post("/transactions/bulk-delete", requireAdmin, async (req, res) => {
+  try {
+    const ids = req.body?.ids;
+    if (!Array.isArray(ids) || ids.length === 0) {
+      return res.status(400).json({ message: "ids must be a non-empty array" });
+    }
+    if (ids.length > 500) {
+      return res.status(400).json({ message: "At most 500 ids per request" });
+    }
+    const objectIds = [];
+    for (const id of ids) {
+      const s = String(id ?? "").trim();
+      if (!mongoose.Types.ObjectId.isValid(s)) {
+        return res.status(400).json({ message: `Invalid id: ${id}` });
+      }
+      objectIds.push(s);
+    }
+    const result = await FinanceTransaction.deleteMany({ _id: { $in: objectIds } });
+    res.json({ deletedCount: result.deletedCount ?? 0 });
+  } catch (error) {
+    res.status(400).json({ message: "Bulk delete failed", error: error.message });
   }
 });
 

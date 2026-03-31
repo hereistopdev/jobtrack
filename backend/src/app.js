@@ -7,6 +7,8 @@ import adminUsersRouter from "./routes/adminUsers.js";
 import adminJobLinksRouter from "./routes/adminJobLinks.js";
 import analyticsRouter from "./routes/analytics.js";
 import financeRouter from "./routes/finance.js";
+import interviewsRouter from "./routes/interviews.js";
+import userDirectoryRouter from "./routes/userDirectory.js";
 
 const app = express();
 
@@ -27,10 +29,12 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/users", userDirectoryRouter);
 app.use("/api/job-links", jobLinksRouter);
 app.use("/api/admin/users", adminUsersRouter);
 app.use("/api/admin/job-links", adminJobLinksRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/finance", financeRouter);
+app.use("/api/interviews", interviewsRouter);
 
 export default app;
