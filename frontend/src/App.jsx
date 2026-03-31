@@ -8,6 +8,7 @@ import UsersPage from "./pages/UsersPage";
 import FinancePage from "./pages/FinancePage";
 import InterviewsPage from "./pages/InterviewsPage";
 import InterviewCalendarPage from "./pages/InterviewCalendarPage";
+import AccountsPage from "./pages/AccountsPage";
 
 function App() {
   const { user, loading } = useAuth();
@@ -36,6 +37,7 @@ function App() {
         <Route path="/pipeline" element={<Navigate to="/" replace />} />
         <Route path="/interviews" element={<InterviewsPage />} />
         <Route path="/interviews/calendar" element={<InterviewCalendarPage />} />
+        <Route path="/accounts" element={<AccountsPage />} />
         <Route
           path="/users"
           element={user.role === "admin" ? <UsersPage /> : <Navigate to="/" replace />}

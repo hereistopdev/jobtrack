@@ -2443,3 +2443,287 @@ th {
   padding-top: 14px;
   border-top: 1px solid #e5e7eb;
 }
+
+/* Team accounts */
+.accounts-page .accounts-warning {
+  margin-bottom: 12px;
+  padding: 10px 12px;
+  font-size: 0.85rem;
+  color: #7c2d12;
+  background: #fff7ed;
+  border: 1px solid #fed7aa;
+  border-radius: 8px;
+}
+
+.accounts-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 10px 12px;
+}
+
+.accounts-tab-btn {
+  padding: 8px 14px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #4b5563;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.accounts-tab-btn:hover {
+  background: #fff;
+  color: #111827;
+}
+
+.accounts-tab-btn.is-active {
+  background: #fff;
+  color: #1d4ed8;
+  font-weight: 600;
+  border-color: #93c5fd;
+  box-shadow: 0 1px 2px rgba(29, 78, 216, 0.12);
+}
+
+.accounts-form-card {
+  margin-bottom: 12px;
+}
+
+.accounts-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 220px) 1fr;
+  gap: 10px 14px;
+  align-items: start;
+}
+
+.accounts-form-grid .form-field-span2 {
+  grid-column: 1 / -1;
+}
+
+.accounts-form-actions {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 4px;
+}
+
+.accounts-textarea-mono {
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+  font-size: 0.8rem;
+}
+
+.accounts-table-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.accounts-filter {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.75rem;
+}
+
+.accounts-filter select {
+  min-width: 12rem;
+  font-size: 0.8rem;
+}
+
+.accounts-team-group {
+  margin-bottom: 20px;
+}
+
+.accounts-team-group:last-child {
+  margin-bottom: 0;
+}
+
+.accounts-team-heading {
+  margin: 0 0 8px;
+  font-size: 0.95rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.accounts-team-email {
+  font-size: 0.8rem;
+  font-weight: 400;
+}
+
+.accounts-cat-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  color: #1e40af;
+  background: #eff6ff;
+  border-radius: 999px;
+}
+
+.accounts-td-label {
+  font-weight: 600;
+  color: #111827;
+}
+
+.accounts-td-mono,
+.accounts-td-cred {
+  font-family: ui-monospace, "Cascadia Code", "Consolas", monospace;
+  font-size: 0.78rem;
+  word-break: break-word;
+}
+
+.accounts-td-notes {
+  font-size: 0.8rem;
+  color: #374151;
+  white-space: pre-wrap;
+  max-width: 18rem;
+}
+
+.accounts-cred-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.accounts-cred-text {
+  user-select: none;
+}
+
+.accounts-copy-btn {
+  flex-shrink: 0;
+}
+
+@media (max-width: 900px) {
+  .accounts-form-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.accounts-dash-shell {
+  margin-top: 8px;
+  min-height: min(64vh, 520px);
+}
+
+.authenticator-warning {
+  margin-bottom: 12px;
+}
+
+.authenticator-codes-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.authenticator-timer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 140px;
+}
+
+.authenticator-timer-bar-wrap {
+  flex: 1;
+  height: 6px;
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+  min-width: 80px;
+}
+
+.authenticator-timer-bar {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  border-radius: 999px;
+  transition: width 0.2s linear;
+}
+
+.authenticator-timer-text {
+  font-size: 0.8rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #374151;
+  min-width: 2rem;
+  text-align: right;
+}
+
+.authenticator-code-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.authenticator-code-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid #e5e7eb;
+  border-radius: 10px;
+  background: #fafafa;
+}
+
+.authenticator-code-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.authenticator-code-issuer {
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+.authenticator-code-label {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #111827;
+  word-break: break-word;
+}
+
+.authenticator-code-digits {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.authenticator-code-value {
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.12em;
+  padding: 6px 12px;
+  background: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  color: #0f172a;
+}

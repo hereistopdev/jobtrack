@@ -369,3 +369,76 @@ export async function importInterviewExcel(file) {
   if (!res.ok) throw new Error(data.message || data.error || `Import failed (${res.status})`);
   return data;
 }
+
+/** @param {{ view?: "all" }} opts */
+export async function fetchTeamAccounts(opts = {}) {
+  const q = opts.view === "all" ? "?view=all" : "";
+  const res = await fetch(`${API_BASE_URL}/team-accounts${q}`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function createTeamAccount(body) {
+  const res = await fetch(`${API_BASE_URL}/team-accounts`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function updateTeamAccount(id, body) {
+  const res = await fetch(`${API_BASE_URL}/team-accounts/${encodeURIComponent(id)}`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function deleteTeamAccount(id) {
+  const res = await fetch(`${API_BASE_URL}/team-accounts/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function fetchTotpEntries() {
+  const res = await fetch(`${API_BASE_URL}/totp-entries`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function fetchTotpCodes() {
+  const res = await fetch(`${API_BASE_URL}/totp-entries/codes`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function createTotpEntry(body) {
+  const res = await fetch(`${API_BASE_URL}/totp-entries`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function deleteTotpEntry(id) {
+  const res = await fetch(`${API_BASE_URL}/totp-entries/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
