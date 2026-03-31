@@ -365,6 +365,66 @@ export default function InterviewsPage() {
     startEditRef.current(row);
   }, [loading, records, searchParams, editingId, setSearchParams]);
 
+  /** Calendar drag → ?start=&end=&tz= (UTC ISO) */
+  useEffect(() => {
+    if (searchParams.get("edit")) return;
+    const start = searchParams.get("start");
+    const end = searchParams.get("end");
+    const tz = searchParams.get("tz");
+    if (!start || !end || !tz) return;
+    if (loading) return;
+    const s = new Date(start);
+    const e = new Date(end);
+    if (Number.isNaN(s.getTime()) || Number.isNaN(e.getTime())) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("start");
+          next.delete("end");
+          next.delete("tz");
+          return next;
+        },
+        { replace: true }
+      );
+      return;
+    }
+    if (e.getTime() <= s.getTime()) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("start");
+          next.delete("end");
+          next.delete("tz");
+          return next;
+        },
+        { replace: true }
+      );
+      return;
+    }
+    setEditingId(null);
+    setSubjectPickUserId("");
+    setInterviewerPickId("");
+    const base = emptyForm();
+    setForm({
+      ...base,
+      timezone: tz,
+      scheduledAt: utcToZonedLocalString(s, tz),
+      scheduledEndAt: utcToZonedLocalString(e, tz)
+    });
+    setDashTab("entry");
+    dashPanelRef.current?.scrollTo?.(0, 0);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.delete("start");
+        next.delete("end");
+        next.delete("tz");
+        return next;
+      },
+      { replace: true }
+    );
+  }, [loading, searchParams, setSearchParams]);
+
   const cancelEdit = () => {
     setEditingId(null);
     setSubjectPickUserId("");

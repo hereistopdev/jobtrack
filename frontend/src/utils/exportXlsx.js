@@ -199,10 +199,20 @@ export function exportAnalyticsToXlsx(data, filename = "analytics") {
     Status: s.status || "",
     Count: s.count
   }));
+  const byUserStatus = (data?.byUserStatus || []).map((r) => ({
+    Name: r.name || "",
+    Email: r.email || "",
+    Saved: r.Saved ?? 0,
+    Applied: r.Applied ?? 0,
+    Interview: r.Interview ?? 0,
+    Offer: r.Offer ?? 0,
+    Rejected: r.Rejected ?? 0
+  }));
   const sheets = [];
   if (byUser.length) sheets.push({ name: "By teammate", rows: byUser });
   if (byMonth.length) sheets.push({ name: "By month", rows: byMonth });
   if (status.length) sheets.push({ name: "Status", rows: status });
+  if (byUserStatus.length) sheets.push({ name: "Bid status by teammate", rows: byUserStatus });
   if (!sheets.length) return;
   downloadXlsxWorkbook(sheets, filename);
 }

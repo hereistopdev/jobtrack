@@ -1,5 +1,5 @@
 import { DateTime } from "luxon";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { fetchInterviewCalendar } from "../api";
 import { effectiveEndMs, rangesOverlap } from "../utils/interviewTime";
@@ -44,6 +44,14 @@ function eventBlockStyle(clip) {
   return { top, height };
 }
 
+/** Pixel Y within grid → slot index [0, SLOTS_PER_DAY - 1]. */
+function yToSlot(clientY, gridEl) {
+  const rect = gridEl.getBoundingClientRect();
+  const y = clientY - rect.top;
+  const raw = Math.floor(y / PX_PER_SLOT);
+  return Math.max(0, Math.min(SLOTS_PER_DAY - 1, raw));
+}
+
 function eventOverlapsDay(ev, dayStart) {
   const ds = dayStart.toUTC().toMillis();
   const de = dayStart.plus({ days: 1 }).toUTC().toMillis();
@@ -70,6 +78,9 @@ export default function InterviewCalendarPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [selectedEv, setSelectedEv] = useState(null);
+  /** Drag-select preview: same column, min/max slot while pointer down. */
+  const [dragDraft, setDragDraft] = useState(null);
+  const dragStartRef = useRef(null);
   /** Recomputed on interval so the “now” line moves. */
   const [nowTick, setNowTick] = useState(0);
 
@@ -197,6 +208,68 @@ export default function InterviewCalendarPage() {
     closeDetails();
   };
 
+  const handleGridPointerDown = useCallback(
+    (e, dayIso) => {
+      if (e.button !== 0) return;
+      if (e.target.closest(".interview-cal-block")) return;
+      e.preventDefault();
+      const grid = e.currentTarget;
+      const startSlot = yToSlot(e.clientY, grid);
+      dragStartRef.current = { dayIso, startSlot };
+      setDragDraft({ dayIso, startSlot, endSlot: startSlot });
+      try {
+        grid.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+
+      const finish = (ev, cancelled) => {
+        try {
+          grid.releasePointerCapture(ev.pointerId);
+        } catch {
+          /* ignore */
+        }
+        grid.removeEventListener("pointermove", onMove);
+        grid.removeEventListener("pointerup", onUp);
+        grid.removeEventListener("pointercancel", onUp);
+        const d = dragStartRef.current;
+        dragStartRef.current = null;
+        setDragDraft(null);
+        if (cancelled || !d || d.dayIso !== dayIso) return;
+        const endSlot = yToSlot(ev.clientY, grid);
+        const lo = Math.min(d.startSlot, endSlot);
+        const hi = Math.max(d.startSlot, endSlot);
+        const startM = lo * SLOT_MINUTES;
+        const endM = (hi + 1) * SLOT_MINUTES;
+        const dayStart = DateTime.fromISO(`${dayIso}T00:00:00`, { zone: calendarTz });
+        if (!dayStart.isValid) return;
+        const startDt = dayStart.plus({ minutes: startM });
+        const endDt = dayStart.plus({ minutes: endM });
+        navigate(
+          `/interviews?start=${encodeURIComponent(startDt.toUTC().toISO())}&end=${encodeURIComponent(
+            endDt.toUTC().toISO()
+          )}&tz=${encodeURIComponent(calendarTz)}`
+        );
+      };
+
+      const onMove = (ev) => {
+        const endSlot = yToSlot(ev.clientY, grid);
+        setDragDraft((prev) =>
+          prev && prev.dayIso === dayIso ? { ...prev, endSlot } : prev
+        );
+      };
+
+      const onUp = (ev) => {
+        finish(ev, ev.type === "pointercancel");
+      };
+
+      grid.addEventListener("pointermove", onMove);
+      grid.addEventListener("pointerup", onUp);
+      grid.addEventListener("pointercancel", onUp);
+    },
+    [calendarTz, navigate]
+  );
+
   useEffect(() => {
     if (!selectedEv) return;
     const onKey = (e) => {
@@ -216,7 +289,8 @@ export default function InterviewCalendarPage() {
         <div>
           <h1>Interview calendar</h1>
           <p>
-            Week grid uses the timezone below (default Pacific). Click a block for details and edit. Manage rows on{" "}
+            Week grid uses the timezone below (default Pacific). Drag on an empty area to pick a time range (like Google
+            Calendar), then add interview details on the Interviews page. Click a block for details. Manage rows on{" "}
             <Link to="/interviews">Interviews</Link>.
           </p>
         </div>
@@ -296,9 +370,26 @@ export default function InterviewCalendarPage() {
                   const key = d.toISODate();
                   const dayStart = d;
                   const list = byDay.get(key) || [];
+                  const draftForDay =
+                    dragDraft && dragDraft.dayIso === key
+                      ? (() => {
+                          const lo = Math.min(dragDraft.startSlot, dragDraft.endSlot);
+                          const hi = Math.max(dragDraft.startSlot, dragDraft.endSlot);
+                          const startM = lo * SLOT_MINUTES;
+                          const endM = (hi + 1) * SLOT_MINUTES;
+                          return eventBlockStyle({ startM, endM });
+                        })()
+                      : null;
+
                   return (
                     <div key={key} className="interview-cal-day-column">
-                      <div className="interview-cal-day-grid" style={{ height: GRID_HEIGHT }}>
+                      <div
+                        className="interview-cal-day-grid"
+                        style={{ height: GRID_HEIGHT }}
+                        onPointerDown={(e) => handleGridPointerDown(e, key)}
+                        role="group"
+                        aria-label={`${key}: drag on empty cells to choose a time range`}
+                      >
                         {slotLines.map((slotIdx) => (
                           <div
                             key={slotIdx}
@@ -306,6 +397,13 @@ export default function InterviewCalendarPage() {
                             style={{ height: PX_PER_SLOT }}
                           />
                         ))}
+                        {draftForDay && (
+                          <div
+                            className="interview-cal-select-preview"
+                            style={{ top: draftForDay.top, height: draftForDay.height }}
+                            aria-hidden
+                          />
+                        )}
                         <div className="interview-cal-events-layer">
                           {list.map((ev) => {
                             const clip = clipEventToDay(dayStart, ev, calendarTz);
@@ -362,9 +460,10 @@ export default function InterviewCalendarPage() {
           </div>
           <p className="interview-cal-legend muted-text">
             Times and day columns follow <strong>{calendarTz}</strong> (Pacific by default). Each horizontal line is 30
-            minutes. The <strong className="interview-cal-now-legend">red line</strong> is the current time (when today
-            falls in this week); it updates every 30 seconds. Slot colors match the <strong>interview subject</strong>{" "}
-            (teammate); linked users share one color.
+            minutes. Drag on empty space to schedule; each row is snapped to 30 minutes. The{" "}
+            <strong className="interview-cal-now-legend">red line</strong> is the current time (when today falls in this
+            week); it updates every 30 seconds. Slot colors match the <strong>interview subject</strong> (teammate);
+            linked users share one color.
           </p>
           {ownerPalette.orderedKeys.length > 0 && (
             <div className="interview-cal-owner-legend" aria-label="Subject colors for this week">

@@ -4,12 +4,14 @@ import {
   createJobLink,
   deleteJobLink,
   fetchJobLinks,
+  fetchPipelineTimeseries,
   removeJobInterview,
   updateJobLink
 } from "../api";
 import { useAuth } from "../context/AuthContext";
 import JobForm from "../components/JobForm";
 import ExcelImportCard from "../components/ExcelImportCard";
+import JobLinksPipelineSection from "../components/JobLinksPipelineSection";
 import JobTable from "../components/JobTable";
 import PaginationBar from "../components/PaginationBar";
 import { defaultLast7DayRange } from "../utils/dateRange";
@@ -37,6 +39,11 @@ export default function DashboardPage() {
   const [sort, setSort] = useState({ key: "date", dir: "desc" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
+  const [dashTab, setDashTab] = useState("list");
+  const [pipelineSeries, setPipelineSeries] = useState(null);
+  const [pipelineSeriesError, setPipelineSeriesError] = useState("");
+  const [pipelineSeriesLoading, setPipelineSeriesLoading] = useState(false);
+  const [pipelineTimeTab, setPipelineTimeTab] = useState("daily");
 
   const jobLinkInputRef = useRef(null);
   const searchInputRef = useRef(null);
@@ -92,6 +99,27 @@ export default function DashboardPage() {
   useEffect(() => {
     loadLinks();
   }, []);
+
+  useEffect(() => {
+    if (dashTab !== "pipeline") return;
+    if (pipelineSeries) return;
+    let cancelled = false;
+    setPipelineSeriesError("");
+    setPipelineSeriesLoading(true);
+    fetchPipelineTimeseries()
+      .then((data) => {
+        if (!cancelled) setPipelineSeries(data);
+      })
+      .catch((e) => {
+        if (!cancelled) setPipelineSeriesError(e.message || "Failed to load pipeline charts");
+      })
+      .finally(() => {
+        if (!cancelled) setPipelineSeriesLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [dashTab, pipelineSeries]);
 
   const handleExcelImported = (items) => {
     setLinks((prev) => [...items, ...prev]);
@@ -284,8 +312,8 @@ export default function DashboardPage() {
         <div>
           <h1>Job links</h1>
           <p>
-            Everyone on the team sees all job links and who added each one. Use filters and pagination to narrow the
-            list.
+            Everyone on the team sees all job links and who added each one. Use the right-hand List / Pipeline switch to
+            browse the table or bid status over time. Filters and pagination apply to the list.
           </p>
         </div>
       </header>
@@ -301,7 +329,25 @@ export default function DashboardPage() {
           <ExcelImportCard onImported={handleExcelImported} />
         </aside>
 
-        <div className="dashboard-panel dashboard-panel-right">
+        <div
+          className={`dashboard-panel dashboard-panel-right dashboard-joblinks-panel${
+            dashTab === "pipeline" ? " dashboard-joblinks-panel-pipeline" : ""
+          }`}
+        >
+          <div
+            className={`finance-dash-shell dashboard-joblinks-shell${
+              dashTab === "pipeline" ? " dashboard-joblinks-shell-pipeline" : ""
+            }`}
+          >
+            <div
+              className="finance-dash-panel"
+              role="tabpanel"
+              id="joblinks-dash-panel"
+              aria-labelledby={`joblinks-dash-tab-${dashTab}`}
+              tabIndex={-1}
+            >
+              {dashTab === "list" && (
+                <>
           <section className="toolbar card toolbar-extended">
             <div className="toolbar-filters-row">
               <div className="toolbar-search">
@@ -400,6 +446,50 @@ export default function DashboardPage() {
               />
             </>
           )}
+                </>
+              )}
+
+              {dashTab === "pipeline" && (
+                <>
+                  {pipelineSeriesError && <div className="card error">{pipelineSeriesError}</div>}
+                  <JobLinksPipelineSection
+                    links={links}
+                    series={pipelineSeries}
+                    timeTab={pipelineTimeTab}
+                    onTimeTabChange={setPipelineTimeTab}
+                    timeseriesLoading={pipelineSeriesLoading}
+                  />
+                </>
+              )}
+            </div>
+
+            <nav className="finance-dash-tabs-nav" aria-label="Job links sections">
+              <div className="finance-dash-tabs-rail" role="tablist" aria-orientation="vertical">
+                <button
+                  type="button"
+                  id="joblinks-dash-tab-list"
+                  role="tab"
+                  aria-selected={dashTab === "list"}
+                  aria-controls="joblinks-dash-panel"
+                  className={`finance-dash-tab-btn${dashTab === "list" ? " is-active" : ""}`}
+                  onClick={() => setDashTab("list")}
+                >
+                  List
+                </button>
+                <button
+                  type="button"
+                  id="joblinks-dash-tab-pipeline"
+                  role="tab"
+                  aria-selected={dashTab === "pipeline"}
+                  aria-controls="joblinks-dash-panel"
+                  className={`finance-dash-tab-btn${dashTab === "pipeline" ? " is-active" : ""}`}
+                  onClick={() => setDashTab("pipeline")}
+                >
+                  Pipeline
+                </button>
+              </div>
+            </nav>
+          </div>
         </div>
       </div>
     </main>

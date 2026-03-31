@@ -33,6 +33,7 @@ function App() {
       <Route element={<AppLayout />}>
         <Route path="/" element={<DashboardPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
+        <Route path="/pipeline" element={<Navigate to="/" replace />} />
         <Route path="/interviews" element={<InterviewsPage />} />
         <Route path="/interviews/calendar" element={<InterviewCalendarPage />} />
         <Route

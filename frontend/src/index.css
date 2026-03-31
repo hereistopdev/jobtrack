@@ -1486,6 +1486,78 @@ th {
   box-shadow: 0 1px 2px rgba(29, 78, 216, 0.12);
 }
 
+/* Pipeline (bid status over time) */
+.pipeline-time-chart-wrap {
+  overflow-x: auto;
+  max-width: 100%;
+  margin-top: 6px;
+}
+
+.pipeline-time-chart-inner {
+  min-width: min(100%, 720px);
+}
+
+.pipeline-dash-shell {
+  margin-top: 12px;
+  min-height: min(62vh, 560px);
+}
+
+/* Job links page: List | Pipeline rail */
+.dashboard-joblinks-panel .finance-dash-shell {
+  margin-top: 0;
+}
+
+.dashboard-joblinks-shell {
+  min-height: 0;
+  align-items: stretch;
+}
+
+.dashboard-joblinks-shell-pipeline {
+  min-height: min(62vh, 560px);
+}
+
+.joblinks-pipeline-section {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.pipeline-time-inline-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.pipeline-time-tab-btn {
+  padding: 8px 14px;
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #4b5563;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  cursor: pointer;
+  line-height: 1.3;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.pipeline-time-tab-btn:hover {
+  background: #fff;
+  color: #111827;
+}
+
+.pipeline-time-tab-btn.is-active {
+  background: #fff;
+  color: #1d4ed8;
+  font-weight: 600;
+  border-color: #93c5fd;
+  box-shadow: 0 1px 2px rgba(29, 78, 216, 0.12);
+}
+
 @media (max-width: 768px) {
   .finance-dash-shell {
     flex-direction: column-reverse;
@@ -2153,6 +2225,21 @@ th {
 .interview-cal-day-grid {
   position: relative;
   background: #fff;
+  cursor: crosshair;
+  touch-action: none;
+  user-select: none;
+}
+
+.interview-cal-select-preview {
+  position: absolute;
+  left: 2px;
+  right: 2px;
+  z-index: 0;
+  box-sizing: border-box;
+  border-radius: 4px;
+  border: 2px dashed #2563eb;
+  background: rgba(37, 99, 235, 0.12);
+  pointer-events: none;
 }
 
 .interview-cal-slot-line {

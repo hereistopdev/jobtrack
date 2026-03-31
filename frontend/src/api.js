@@ -149,6 +149,14 @@ export async function fetchAnalyticsSummary() {
   return res.json();
 }
 
+export async function fetchPipelineTimeseries() {
+  const res = await fetch(`${API_BASE_URL}/analytics/pipeline-timeseries`, {
+    headers: { ...authHeaders() }
+  });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
 export async function fetchAdminUsers() {
   const res = await fetch(`${API_BASE_URL}/admin/users`, {
     headers: { ...authHeaders() }
