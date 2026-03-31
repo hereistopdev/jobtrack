@@ -1,5 +1,6 @@
 import XLSX from "xlsx";
 import { InterviewRecord } from "../models/InterviewRecord.js";
+import { DEFAULT_INTERVIEW_DURATION_MS } from "./interviewTimeRange.js";
 
 function normCell(c) {
   return String(c ?? "")
@@ -146,6 +147,7 @@ export async function importInterviewExcelBuffer(buffer, { userId }) {
             profile: iProfile >= 0 ? String(row[iProfile] ?? "").trim() : "",
             stack: iStack >= 0 ? String(row[iStack] ?? "").trim() : "",
             scheduledAt,
+            scheduledEndAt: new Date(scheduledAt.getTime() + DEFAULT_INTERVIEW_DURATION_MS),
             interviewType: iType >= 0 ? String(row[iType] ?? "").trim() : "",
             resultStatus: iStatus >= 0 ? String(row[iStatus] ?? "").trim() : "",
             notes: iNotes >= 0 ? String(row[iNotes] ?? "").trim() : "",
@@ -201,6 +203,7 @@ export async function importInterviewExcelBuffer(buffer, { userId }) {
             profile: "",
             stack: "",
             scheduledAt,
+            scheduledEndAt: new Date(scheduledAt.getTime() + DEFAULT_INTERVIEW_DURATION_MS),
             interviewType: "",
             resultStatus: iResult >= 0 ? String(row[iResult] ?? "").trim() : "",
             notes: iNote >= 0 ? String(row[iNote] ?? "").trim() : "",

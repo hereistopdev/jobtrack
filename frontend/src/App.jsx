@@ -7,6 +7,7 @@ import AnalyticsPage from "./pages/AnalyticsPage";
 import UsersPage from "./pages/UsersPage";
 import FinancePage from "./pages/FinancePage";
 import InterviewsPage from "./pages/InterviewsPage";
+import InterviewCalendarPage from "./pages/InterviewCalendarPage";
 
 function App() {
   const { user, loading } = useAuth();
@@ -33,6 +34,7 @@ function App() {
         <Route path="/" element={<DashboardPage />} />
         <Route path="/analytics" element={<AnalyticsPage />} />
         <Route path="/interviews" element={<InterviewsPage />} />
+        <Route path="/interviews/calendar" element={<InterviewCalendarPage />} />
         <Route
           path="/users"
           element={user.role === "admin" ? <UsersPage /> : <Navigate to="/" replace />}

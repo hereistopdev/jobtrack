@@ -15,6 +15,10 @@ const interviewRecordSchema = new mongoose.Schema(
     profile: { type: String, trim: true, default: "" },
     stack: { type: String, trim: true, default: "" },
     scheduledAt: { type: Date, required: true },
+    /** End of slot (exclusive of overlap logic uses standard overlap). If omitted, defaults to start + 1h in API. */
+    scheduledEndAt: { type: Date, default: null },
+    /** IANA timezone used when the slot was entered (e.g. America/New_York). Empty for legacy rows. */
+    timezone: { type: String, trim: true, default: "" },
     interviewType: { type: String, trim: true, default: "" },
     resultStatus: { type: String, trim: true, default: "" },
     notes: { type: String, trim: true, default: "" },

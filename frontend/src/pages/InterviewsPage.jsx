@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { Link, useSearchParams } from "react-router-dom";
 import {
   Bar,
   BarChart,
@@ -22,6 +23,14 @@ import {
 import { useAuth } from "../context/AuthContext";
 import { useTeamDirectory } from "../hooks/useTeamDirectory";
 import { exportInterviewRecordsToXlsx } from "../utils/exportXlsx";
+import { effectiveEndMs } from "../utils/interviewTime";
+import {
+  formatTimeZoneOptionLabel,
+  getDefaultTimeZone,
+  getSortedTimeZones,
+  utcToZonedLocalString,
+  zonedLocalStringToUtc
+} from "../utils/interviewZonedTime";
 
 const COLORS = ["#2563eb", "#7c3aed", "#059669", "#d97706", "#dc2626", "#0891b2"];
 
@@ -52,32 +61,26 @@ function SortTh({ id, label, sortKey, sortDir, onSort }) {
   );
 }
 
-function toLocalInputValue(d) {
-  if (!d) return "";
-  const x = new Date(d);
-  if (Number.isNaN(x.getTime())) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${x.getFullYear()}-${pad(x.getMonth() + 1)}-${pad(x.getDate())}T${pad(x.getHours())}:${pad(x.getMinutes())}`;
-}
-
-function defaultScheduledLocal() {
-  return toLocalInputValue(new Date());
-}
-
-const emptyForm = () => ({
+const emptyForm = () => {
+  const tz = getDefaultTimeZone();
+  const now = Date.now();
+  return {
   subjectName: "",
   company: "",
   roleTitle: "",
   profile: "",
   stack: "",
-  scheduledAt: defaultScheduledLocal(),
+  timezone: tz,
+  scheduledAt: utcToZonedLocalString(new Date(now), tz),
+  scheduledEndAt: utcToZonedLocalString(new Date(now + 60 * 60 * 1000), tz),
   interviewType: "",
   resultStatus: "",
   notes: "",
   jobLinkUrl: "",
   interviewerName: "",
   contactInfo: ""
-});
+  };
+};
 
 function canModifyRow(row, user) {
   if (!user) return false;
@@ -88,10 +91,15 @@ function canModifyRow(row, user) {
   return oid === user.id;
 }
 
-function formatShortDate(iso) {
-  if (!iso) return "—";
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? "—" : d.toLocaleString(undefined, { dateStyle: "medium", timeStyle: "short" });
+function formatTimeRange(row) {
+  if (!row?.scheduledAt) return "—";
+  const s = new Date(row.scheduledAt);
+  if (Number.isNaN(s.getTime())) return "—";
+  const e = new Date(effectiveEndMs(row));
+  const tz = (row.timezone || "").trim();
+  const tzOpt = tz ? { timeZone: tz } : {};
+  const opt = { dateStyle: "medium", timeStyle: "short", ...tzOpt };
+  return `${s.toLocaleString(undefined, opt)} – ${e.toLocaleString(undefined, { timeStyle: "short", ...tzOpt })}`;
 }
 
 export default function InterviewsPage() {
@@ -107,6 +115,7 @@ export default function InterviewsPage() {
   const [query, setQuery] = useState("");
   const [importBusy, setImportBusy] = useState(false);
   const importInputRef = useRef(null);
+  const [searchParams, setSearchParams] = useSearchParams();
   const [sort, setSort] = useState({ key: "scheduledAt", dir: "desc" });
   const [selectedUserId, setSelectedUserId] = useState("");
   const [subjectPickUserId, setSubjectPickUserId] = useState("");
@@ -257,6 +266,32 @@ export default function InterviewsPage() {
     }));
   }, [selectedUserSeries]);
 
+  const { timeZoneIds, timeZoneSelectOptions } = useMemo(() => {
+    const ids = getSortedTimeZones();
+    return {
+      timeZoneIds: ids,
+      timeZoneSelectOptions: ids.map((iana) => ({
+        value: iana,
+        label: formatTimeZoneOptionLabel(iana)
+      }))
+    };
+  }, []);
+
+  const dashPanelRef = useRef(null);
+  const [dashTab, setDashTab] = useState("dashboard");
+  const interviewTabs = useMemo(
+    () => [
+      { id: "dashboard", label: "Dashboard" },
+      { id: "entry", label: "Add or edit" },
+      { id: "records", label: "All records" }
+    ],
+    []
+  );
+
+  useEffect(() => {
+    dashPanelRef.current?.scrollTo?.(0, 0);
+  }, [dashTab]);
+
   const handleFormChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
   };
@@ -274,13 +309,18 @@ export default function InterviewsPage() {
     const iname = (row.interviewerName || "").trim();
     const im = teamMembers.find((m) => m.displayName === iname);
     setInterviewerPickId(im ? im.id : "");
+    const tz = (row.timezone || "").trim() || getDefaultTimeZone();
     setForm({
       subjectName: row.subjectName || "",
       company: row.company || "",
       roleTitle: row.roleTitle || "",
       profile: row.profile || "",
       stack: row.stack || "",
-      scheduledAt: toLocalInputValue(row.scheduledAt),
+      timezone: tz,
+      scheduledAt: utcToZonedLocalString(row.scheduledAt, tz),
+      scheduledEndAt: row.scheduledEndAt
+        ? utcToZonedLocalString(row.scheduledEndAt, tz)
+        : utcToZonedLocalString(new Date(effectiveEndMs(row)), tz),
       interviewType: row.interviewType || "",
       resultStatus: row.resultStatus || "",
       notes: row.notes || "",
@@ -288,8 +328,42 @@ export default function InterviewsPage() {
       interviewerName: row.interviewerName || "",
       contactInfo: row.contactInfo || ""
     });
-    document.getElementById("interviews-form")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setDashTab("entry");
+    dashPanelRef.current?.scrollTo?.(0, 0);
   };
+
+  const startEditRef = useRef(startEdit);
+  startEditRef.current = startEdit;
+
+  useEffect(() => {
+    const id = searchParams.get("edit");
+    if (!id) return;
+    if (loading) return;
+    const row = records.find((r) => String(r._id) === id);
+    if (!row) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("edit");
+          return next;
+        },
+        { replace: true }
+      );
+      return;
+    }
+    if (String(editingId || "") === id) {
+      setSearchParams(
+        (prev) => {
+          const next = new URLSearchParams(prev);
+          next.delete("edit");
+          return next;
+        },
+        { replace: true }
+      );
+      return;
+    }
+    startEditRef.current(row);
+  }, [loading, records, searchParams, editingId, setSearchParams]);
 
   const cancelEdit = () => {
     setEditingId(null);
@@ -303,9 +377,15 @@ export default function InterviewsPage() {
     setSaving(true);
     setError("");
     try {
-      const scheduledAt = new Date(form.scheduledAt);
-      if (Number.isNaN(scheduledAt.getTime())) {
-        setError("Please set a valid date and time.");
+      const zone = (form.timezone || "").trim() || getDefaultTimeZone();
+      const scheduledAt = zonedLocalStringToUtc(form.scheduledAt, zone);
+      const scheduledEnd = zonedLocalStringToUtc(form.scheduledEndAt, zone);
+      if (!scheduledAt || Number.isNaN(scheduledAt.getTime())) {
+        setError("Please set a valid start date and time (check timezone).");
+        return;
+      }
+      if (!scheduledEnd || Number.isNaN(scheduledEnd.getTime()) || scheduledEnd.getTime() <= scheduledAt.getTime()) {
+        setError("End time must be after start time.");
         return;
       }
       const payload = {
@@ -314,7 +394,9 @@ export default function InterviewsPage() {
         roleTitle: form.roleTitle.trim(),
         profile: form.profile.trim(),
         stack: form.stack.trim(),
+        timezone: zone,
         scheduledAt: scheduledAt.toISOString(),
+        scheduledEndAt: scheduledEnd.toISOString(),
         interviewType: form.interviewType.trim(),
         resultStatus: form.resultStatus.trim(),
         notes: form.notes.trim(),
@@ -328,18 +410,52 @@ export default function InterviewsPage() {
           : subjectPickUserId
             ? { subjectUserId: subjectPickUserId }
             : {};
-      const body = { ...payload, ...subjectUserPayload };
-      if (editingId) {
-        const updated = await updateInterviewRecord(editingId, body);
-        setRecords((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
-        cancelEdit();
-      } else {
-        const created = await createInterviewRecord(body);
-        setRecords((prev) => [created, ...prev]);
-        setSubjectPickUserId("");
-        setInterviewerPickId("");
-        setForm(emptyForm());
+      const baseBody = { ...payload, ...subjectUserPayload };
+
+      const runSave = async (skipOverlapCheck) => {
+        const body = skipOverlapCheck ? { ...baseBody, skipOverlapCheck: true } : baseBody;
+        if (editingId) {
+          const updated = await updateInterviewRecord(editingId, body);
+          setRecords((prev) => prev.map((r) => (r._id === updated._id ? updated : r)));
+          cancelEdit();
+        } else {
+          const created = await createInterviewRecord(body);
+          setRecords((prev) => [created, ...prev]);
+          setSubjectPickUserId("");
+          setInterviewerPickId("");
+          setForm(emptyForm());
+        }
+      };
+
+      try {
+        await runSave(false);
+      } catch (err) {
+        if (err.status === 409 && Array.isArray(err.conflicts) && err.conflicts.length) {
+          const lines = err.conflicts
+            .map((c) => {
+              const st = new Date(c.scheduledAt).toLocaleString(undefined, {
+                dateStyle: "short",
+                timeStyle: "short"
+              });
+              const en = c.scheduledEndAt
+                ? new Date(c.scheduledEndAt).toLocaleTimeString(undefined, { timeStyle: "short" })
+                : "";
+              return `• ${c.subjectName} — ${c.company} (${st}${en ? `–${en}` : ""})`;
+            })
+            .join("\n");
+          if (
+            !window.confirm(
+              `This slot overlaps another interview:\n\n${lines}\n\nSave anyway?`
+            )
+          ) {
+            return;
+          }
+          await runSave(true);
+        } else {
+          throw err;
+        }
       }
+
       if (payload.profile) {
         const list = user?.interviewProfiles || [];
         if (user && !list.includes(payload.profile)) {
@@ -399,7 +515,14 @@ export default function InterviewsPage() {
       <header className="page-header page-header-row">
         <div>
           <h1>Interviews</h1>
-          <p>Team-wide interview log — everyone can view; only the person who logged a row (or an admin) can edit or delete.</p>
+          <p>
+            Team-wide interview log — everyone can view; only the person who logged a row (or an admin) can edit or
+            delete.{" "}
+            <Link to="/interviews/calendar" className="interviews-cal-link">
+              Open team calendar
+            </Link>{" "}
+            to spot overlapping slots.
+          </p>
         </div>
         <div className="page-header-actions">
           <input
@@ -431,8 +554,19 @@ export default function InterviewsPage() {
       {loading && <div className="card">Loading interviews…</div>}
       {error && <div className="card error">{error}</div>}
 
-      {!loading && summary && (
-        <>
+      {!loading && (
+        <div className="finance-dash-shell interviews-dash-shell">
+          <div
+            ref={dashPanelRef}
+            className="finance-dash-panel"
+            role="tabpanel"
+            id="interviews-dash-panel"
+            aria-labelledby={`interviews-dash-tab-${dashTab}`}
+            tabIndex={-1}
+          >
+            {dashTab === "dashboard" &&
+              (summary ? (
+                <>
           <div className="analytics-kpis card">
             <div className="analytics-kpi">
               <span className="analytics-kpi-value">{summary.total}</span>
@@ -614,9 +748,14 @@ export default function InterviewsPage() {
               <p className="analytics-empty">No per-user data yet.</p>
             )}
           </section>
-        </>
-      )}
+                </>
+              ) : (
+                <div className="card">
+                  <p className="muted-text">Dashboard metrics are not available yet.</p>
+                </div>
+              ))}
 
+            {dashTab === "entry" && (
       <section id="interviews-form" className="card interviews-form-card">
         <h2 className="table-card-title">{editingId ? "Edit interview" : "Log interview"}</h2>
         {teamDirError && <p className="field-hint muted-text">Team list unavailable ({teamDirError}); you can still type names.</p>}
@@ -668,13 +807,51 @@ export default function InterviewsPage() {
             <span>Role / title</span>
             <input required value={form.roleTitle} onChange={(e) => handleFormChange("roleTitle", e.target.value)} />
           </label>
+          <label className="form-field form-field-span2">
+            <span>Timezone</span>
+            <select
+              value={
+                form.timezone && !timeZoneIds.includes(form.timezone)
+                  ? form.timezone
+                  : form.timezone || getDefaultTimeZone()
+              }
+              onChange={(e) => handleFormChange("timezone", e.target.value)}
+              aria-label="Timezone for start and end times"
+            >
+              {form.timezone && !timeZoneIds.includes(form.timezone) ? (
+                <option value={form.timezone}>
+                  {formatTimeZoneOptionLabel(form.timezone) || form.timezone}
+                </option>
+              ) : null}
+              {timeZoneSelectOptions.map(({ value, label }) => (
+                <option key={value} value={value}>
+                  {label}
+                </option>
+              ))}
+            </select>
+            <span className="muted-text" style={{ fontSize: "0.75rem" }}>
+              Each line shows UTC offset and a short name when available (e.g. EST, PST), then the region id. Times are
+              stored as UTC on the server.
+            </span>
+          </label>
           <label className="form-field">
-            <span>When</span>
+            <span>Start</span>
             <input
               required
               type="datetime-local"
               value={form.scheduledAt}
               onChange={(e) => handleFormChange("scheduledAt", e.target.value)}
+              aria-label="Interview start"
+            />
+          </label>
+          <label className="form-field">
+            <span>End</span>
+            <input
+              required
+              type="datetime-local"
+              value={form.scheduledEndAt}
+              onChange={(e) => handleFormChange("scheduledEndAt", e.target.value)}
+              aria-label="Interview end"
             />
           </label>
           <label className="form-field">
@@ -772,7 +949,9 @@ export default function InterviewsPage() {
           </div>
         </form>
       </section>
+            )}
 
+            {dashTab === "records" && (
       <section className="card table-card">
         <div className="table-toolbar">
           <input
@@ -789,7 +968,7 @@ export default function InterviewsPage() {
           <table className="data-table">
             <thead>
               <tr>
-                <SortTh id="scheduledAt" label="When" sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />
+                <SortTh id="scheduledAt" label="Slot" sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />
                 <SortTh id="subjectName" label="Subject" sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />
                 <SortTh id="company" label="Company" sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />
                 <SortTh id="roleTitle" label="Role" sortKey={sort.key} sortDir={sort.dir} onSort={toggleSort} />
@@ -809,7 +988,7 @@ export default function InterviewsPage() {
                 const canEdit = canModifyRow(r, user);
                 return (
                   <tr key={r._id}>
-                    <td>{formatShortDate(r.scheduledAt)}</td>
+                    <td className="interviews-slot-cell">{formatTimeRange(r)}</td>
                     <td>{r.subjectName}</td>
                     <td>{r.company}</td>
                     <td>{r.roleTitle}</td>
@@ -837,6 +1016,29 @@ export default function InterviewsPage() {
           {!sortedFiltered.length && !loading && <p className="table-empty">No rows match.</p>}
         </div>
       </section>
+            )}
+          </div>
+
+          <nav className="finance-dash-tabs-nav" aria-label="Interviews sections">
+            <div className="finance-dash-tabs-rail" role="tablist" aria-orientation="vertical">
+              {interviewTabs.map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  id={`interviews-dash-tab-${tab.id}`}
+                  role="tab"
+                  aria-selected={dashTab === tab.id}
+                  aria-controls="interviews-dash-panel"
+                  className={`finance-dash-tab-btn${dashTab === tab.id ? " is-active" : ""}`}
+                  onClick={() => setDashTab(tab.id)}
+                >
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+          </nav>
+        </div>
+      )}
     </main>
   );
 }

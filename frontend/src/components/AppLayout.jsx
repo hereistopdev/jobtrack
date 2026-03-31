@@ -4,7 +4,6 @@ import { useAuth } from "../context/AuthContext";
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const isAdmin = user?.role === "admin";
-
   return (
     <div className="app-shell">
       <header className="app-nav">
@@ -12,13 +11,23 @@ export default function AppLayout() {
           JobTrack
         </NavLink>
         <nav className="app-nav-links" aria-label="Main">
+          <NavLink
+            to="/interviews/calendar"
+            className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}
+          >
+            Calendar
+          </NavLink>
           <NavLink to="/" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`} end>
             Job links
           </NavLink>
           <NavLink to="/analytics" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
             Analytics
           </NavLink>
-          <NavLink to="/interviews" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
+          <NavLink
+            to="/interviews"
+            end
+            className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}
+          >
             Interviews
           </NavLink>
           {(isAdmin || user?.financeAccess) && (

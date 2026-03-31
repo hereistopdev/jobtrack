@@ -289,6 +289,24 @@ export async function fetchInterviewRecords() {
   return res.json();
 }
 
+export async function fetchInterviewCalendar(fromIso, toIso) {
+  const q = new URLSearchParams({ from: fromIso, to: toIso });
+  const res = await fetch(`${API_BASE_URL}/interviews/calendar?${q}`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function checkInterviewConflicts(body) {
+  const res = await fetch(`${API_BASE_URL}/interviews/conflicts-check`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
 export async function createInterviewRecord(body) {
   const res = await fetch(`${API_BASE_URL}/interviews`, {
     method: "POST",
@@ -296,7 +314,12 @@ export async function createInterviewRecord(body) {
     body: JSON.stringify(body)
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const err = new Error(data.message || `Request failed (${res.status})`);
+    err.status = res.status;
+    if (res.status === 409 && Array.isArray(data.conflicts)) err.conflicts = data.conflicts;
+    throw err;
+  }
   return data;
 }
 
@@ -307,7 +330,12 @@ export async function updateInterviewRecord(id, body) {
     body: JSON.stringify(body)
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  if (!res.ok) {
+    const err = new Error(data.message || `Request failed (${res.status})`);
+    err.status = res.status;
+    if (res.status === 409 && Array.isArray(data.conflicts)) err.conflicts = data.conflicts;
+    throw err;
+  }
   return data;
 }
 
