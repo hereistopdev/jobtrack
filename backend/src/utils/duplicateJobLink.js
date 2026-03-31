@@ -29,6 +29,13 @@ export function normalizeCountry(s) {
   return (s || "").trim().toLowerCase();
 }
 
+export function normalizeCompany(s) {
+  return (s || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, " ");
+}
+
 function addedByLabel(user) {
   if (!user) return "Someone";
   if (user.name && user.email) return `${user.name} (${user.email})`;
@@ -36,29 +43,25 @@ function addedByLabel(user) {
 }
 
 /**
- * @returns {Promise<{ reason: 'same_link' | 'same_country_and_role', doc: object } | null>}
+ * Duplicate when the same **company** and **job URL** as an existing row (both normalized).
+ * Does not treat “same URL, different company” or “same company, different URL” as duplicates.
+ *
+ * @returns {Promise<{ reason: 'same_company_and_link', doc: object } | null>}
  */
-export async function findDuplicateJobLink({ link, title, country, excludeId }) {
+export async function findDuplicateJobLink({ link, company, excludeId }) {
   const normLink = normalizeJobUrl(link);
-  const nt = normalizeTitle(title);
-  const nc = normalizeCountry(country);
+  const normCompany = normalizeCompany(company);
+
+  if (!normLink || !normCompany) {
+    return null;
+  }
 
   const filter = excludeId ? { _id: { $ne: excludeId } } : {};
   const candidates = await JobLink.find(filter).populate("createdBy", "email name");
 
   for (const c of candidates) {
-    if (normLink && normalizeJobUrl(c.link) === normLink) {
-      return { reason: "same_link", doc: c };
-    }
-  }
-
-  if (nc && nt) {
-    for (const c of candidates) {
-      const cCountry = normalizeCountry(c.country);
-      if (!cCountry) continue;
-      if (cCountry === nc && normalizeTitle(c.title) === nt) {
-        return { reason: "same_country_and_role", doc: c };
-      }
+    if (normalizeJobUrl(c.link) === normLink && normalizeCompany(c.company) === normCompany) {
+      return { reason: "same_company_and_link", doc: c };
     }
   }
 

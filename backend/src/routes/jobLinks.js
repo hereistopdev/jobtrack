@@ -132,8 +132,7 @@ router.post("/", async (req, res) => {
 
     const dup = await findDuplicateJobLink({
       link,
-      title,
-      country,
+      company,
       excludeId: null
     });
     if (dup) {
@@ -169,10 +168,11 @@ router.put("/:id", async (req, res) => {
 
     const { company, title, link, date, status, notes, country } = req.body || {};
 
+    const nextLink = link !== undefined ? link : job.link;
+    const nextCompany = company !== undefined ? company : job.company;
     const dup = await findDuplicateJobLink({
-      link,
-      title,
-      country,
+      link: nextLink,
+      company: nextCompany,
       excludeId: req.params.id
     });
     if (dup) {

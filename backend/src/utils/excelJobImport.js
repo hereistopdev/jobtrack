@@ -163,18 +163,14 @@ export async function importJobLinksFromExcelBuffer(buffer, { userId }) {
     try {
       const dup = await findDuplicateJobLink({
         link,
-        title,
-        country,
+        company,
         excludeId: null
       });
       if (dup) {
         const fr = formatDuplicateResponse(dup);
         errors.push({
           row: excelRowNum,
-          message:
-            dup.reason === "same_link"
-              ? `Duplicate URL (already on board — ${fr.addedByLabel})`
-              : `Duplicate country + role (already on board — ${fr.addedByLabel})`
+          message: `Duplicate company + job URL (already on board — ${fr.addedByLabel})`
         });
         continue;
       }

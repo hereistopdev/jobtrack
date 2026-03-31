@@ -111,11 +111,9 @@ export default function DashboardPage() {
       if (err.duplicatePayload) {
         const p = err.duplicatePayload;
         const who = p.addedByLabel || p.addedBy?.email || "Someone";
-        const msg =
-          p.duplicateReason === "same_link"
-            ? `This exact job URL is already on the board. It was added by ${who}.`
-            : `The same country and role are already on the board. They were added by ${who}.`;
-        window.alert(msg);
+        window.alert(
+          `This company and job URL are already on the board. They were added by ${who}.`
+        );
         setError("");
         return;
       }
