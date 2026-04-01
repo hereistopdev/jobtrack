@@ -31,18 +31,25 @@ export async function syncCalendarSourceToInterviews(source, ownerUserId) {
   }
 
   const text = await fetchIcsText(icsUrl);
+  if (!/BEGIN:VCALENDAR/i.test(text)) {
+    throw new Error(
+      "URL does not look like an ICS calendar. For Google, use the Secret address in iCal format."
+    );
+  }
   const data = ical.parseICS(text);
   const now = Date.now();
   const rangeFrom = new Date(now - 30 * 24 * 60 * 60 * 1000);
   const rangeTo = new Date(now + 365 * 24 * 60 * 60 * 1000);
 
   let processed = 0;
+  let veventCount = 0;
   const errors = [];
 
   for (const key of Object.keys(data)) {
     if (key === "vcalendar") continue;
     const ev = data[key];
     if (!ev || ev.type !== "VEVENT") continue;
+    veventCount += 1;
     if (ev.status === "CANCELLED") continue;
 
     let instances = [];
@@ -108,6 +115,12 @@ export async function syncCalendarSourceToInterviews(source, ownerUserId) {
       );
       processed += 1;
     }
+  }
+
+  if (veventCount === 0) {
+    throw new Error(
+      "ICS feed parsed, but no events were found. Verify sharing permissions and ensure this is the calendar ICS URL."
+    );
   }
 
   return { processed, errors: errors.slice(0, 8) };

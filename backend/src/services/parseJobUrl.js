@@ -140,11 +140,11 @@ export async function parseJobUrl(urlString) {
   try {
     parsed = new URL(link);
   } catch {
-    return { company: "", title: "", link, date, source: "invalid-url" };
+    return { company: "", title: "", description: "", link, date, source: "invalid-url" };
   }
 
   if (!/^https?:$/i.test(parsed.protocol)) {
-    return { company: "", title: "", link, date, source: "invalid-url" };
+    return { company: "", title: "", description: "", link, date, source: "invalid-url" };
   }
 
   const urlCompany = companyFromUrl(link);
@@ -199,9 +199,16 @@ export async function parseJobUrl(urlString) {
   if (!company && urlCompany) company = urlCompany;
   if (!title && docTitle) title = docTitle;
 
+  const ogDesc = metaContent(html, "og:description");
+  const twDesc = metaContent(html, "twitter:description", "name");
+  const metaDesc = metaContent(html, "description", "name");
+  const rawDesc = (ogDesc || twDesc || metaDesc || "").trim();
+  const description = rawDesc.slice(0, 4000);
+
   return {
     company: company || "",
     title: title || "",
+    description,
     link,
     date,
     source: html ? "fetch+meta" : "url-only"

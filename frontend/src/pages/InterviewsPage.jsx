@@ -20,6 +20,7 @@ import {
   fetchInterviewRecords,
   fetchInterviewSummary,
   importInterviewExcel,
+  parseJobLinkFromUrl,
   patchMyInterviewProfiles,
   syncAllCalendarSources,
   syncCalendarSource,
@@ -132,6 +133,8 @@ export default function InterviewsPage() {
   const [calSaving, setCalSaving] = useState(false);
   const [syncBusyId, setSyncBusyId] = useState("");
   const [syncAllBusy, setSyncAllBusy] = useState(false);
+  const [jobLinkParsing, setJobLinkParsing] = useState(false);
+  const lastParsedJobLinkRef = useRef("");
 
   const loadCalendarSources = useCallback(async () => {
     setCalendarSourcesLoading(true);
@@ -167,6 +170,10 @@ export default function InterviewsPage() {
   useEffect(() => {
     loadAll();
   }, [loadAll]);
+
+  useEffect(() => {
+    lastParsedJobLinkRef.current = "";
+  }, [editingId]);
 
   useEffect(() => {
     if (!summary?.perUser?.length) return;
@@ -531,6 +538,44 @@ export default function InterviewsPage() {
     } finally {
       setSyncAllBusy(false);
     }
+  };
+
+  const runParseInterviewJobLink = async (url) => {
+    const trimmed = url.trim();
+    if (!trimmed || editingId) return;
+    if (!/^https?:\/\//i.test(trimmed)) return;
+    if (trimmed === lastParsedJobLinkRef.current) return;
+    setJobLinkParsing(true);
+    try {
+      const data = await parseJobLinkFromUrl(trimmed);
+      lastParsedJobLinkRef.current = trimmed;
+      setForm((prev) => ({
+        ...prev,
+        jobLinkUrl: data.link || trimmed,
+        company: data.company?.trim() ? data.company.trim() : prev.company,
+        roleTitle: data.title?.trim() ? data.title.trim() : prev.roleTitle,
+        notes: prev.notes.trim()
+          ? prev.notes
+          : data.description?.trim()
+            ? data.description.trim().slice(0, 8000)
+            : prev.notes
+      }));
+    } catch {
+      setForm((prev) => ({ ...prev, jobLinkUrl: trimmed }));
+    } finally {
+      setJobLinkParsing(false);
+    }
+  };
+
+  const handleJobLinkPaste = (e) => {
+    const text = e.clipboardData?.getData("text")?.trim();
+    if (!text || editingId) return;
+    if (!/^https?:\/\//i.test(text)) return;
+    setTimeout(() => runParseInterviewJobLink(text), 0);
+  };
+
+  const handleJobLinkBlur = (e) => {
+    runParseInterviewJobLink(e.target.value);
   };
 
   const handleSubmit = async (e) => {
@@ -1046,12 +1091,21 @@ export default function InterviewsPage() {
           </label>
           <label className="form-field form-field-span2">
             <span>Job link</span>
+            <span className="field-hint muted-text" style={{ display: "block", marginBottom: 4 }}>
+              Paste a posting URL to autofill company, role, and sometimes a short description (best effort; many sites
+              block automated reads).
+            </span>
             <input
               type="url"
               value={form.jobLinkUrl}
               onChange={(e) => handleFormChange("jobLinkUrl", e.target.value)}
+              onPaste={handleJobLinkPaste}
+              onBlur={handleJobLinkBlur}
               placeholder="https://…"
+              disabled={jobLinkParsing}
+              autoComplete="off"
             />
+            {jobLinkParsing && <span className="inline-status">Reading page…</span>}
           </label>
           <label className="form-field form-field-span2">
             <span>Interviewer — pick or type</span>

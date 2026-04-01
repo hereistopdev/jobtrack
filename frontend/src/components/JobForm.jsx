@@ -47,7 +47,12 @@ function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef }) {
       link: data.link || prev.link,
       company: data.company?.trim() ? data.company.trim() : prev.company,
       title: data.title?.trim() ? data.title.trim() : prev.title,
-      date: data.date || todayISO()
+      date: data.date || todayISO(),
+      notes: prev.notes.trim()
+        ? prev.notes
+        : data.description?.trim()
+          ? data.description.trim().slice(0, 8000)
+          : prev.notes
     }));
   };
 
@@ -99,7 +104,10 @@ function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef }) {
 
       <label className="full-width">
         Job link
-        <span className="field-hint">Paste a posting URL to autofill company and role (best effort).</span>
+        <span className="field-hint">
+          Paste a posting URL to autofill company, role, and sometimes a short description from the page (best effort;
+          many ATS sites block automated reads).
+        </span>
         <input
           ref={linkInputRef}
           name="link"
