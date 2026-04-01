@@ -26,7 +26,12 @@ const interviewRecordSchema = new mongoose.Schema(
     interviewerName: { type: String, trim: true, default: "" },
     contactInfo: { type: String, trim: true, default: "" },
     sourceSheet: { type: String, trim: true, default: "" },
-    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true }
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: "User", required: true },
+    /** Set when this row was created from an external calendar sync. */
+    importedFromCalendar: { type: Boolean, default: false },
+    calendarSourceId: { type: mongoose.Schema.Types.ObjectId, ref: "CalendarSource", default: null },
+    /** Stable id from the external calendar (ICS UID), plus instance key for recurring events. */
+    externalEventUid: { type: String, trim: true, default: "" }
   },
   { timestamps: true }
 );
@@ -34,5 +39,9 @@ const interviewRecordSchema = new mongoose.Schema(
 interviewRecordSchema.index({ scheduledAt: -1, _id: -1 });
 interviewRecordSchema.index({ subjectName: 1, scheduledAt: -1 });
 interviewRecordSchema.index({ subjectUserId: 1, scheduledAt: -1 });
+interviewRecordSchema.index(
+  { calendarSourceId: 1, externalEventUid: 1 },
+  { unique: true, partialFilterExpression: { importedFromCalendar: true } }
+);
 
 export const InterviewRecord = mongoose.model("InterviewRecord", interviewRecordSchema);

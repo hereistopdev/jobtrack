@@ -8,6 +8,7 @@ import adminJobLinksRouter from "./routes/adminJobLinks.js";
 import analyticsRouter from "./routes/analytics.js";
 import financeRouter from "./routes/finance.js";
 import interviewsRouter from "./routes/interviews.js";
+import calendarSourcesRouter from "./routes/calendarSources.js";
 import teamAccountsRouter from "./routes/teamAccounts.js";
 import totpEntriesRouter from "./routes/totpEntries.js";
 import userDirectoryRouter from "./routes/userDirectory.js";
@@ -38,6 +39,7 @@ app.use("/api/admin/job-links", adminJobLinksRouter);
 app.use("/api/analytics", analyticsRouter);
 app.use("/api/finance", financeRouter);
 app.use("/api/interviews", interviewsRouter);
+app.use("/api/calendar-sources", calendarSourcesRouter);
 app.use("/api/team-accounts", teamAccountsRouter);
 app.use("/api/totp-entries", totpEntriesRouter);
 

@@ -39,6 +39,13 @@ const userSchema = new mongoose.Schema(
         },
         message: "At most 40 profile labels"
       }
+    },
+    /** Private ICS token for this user's interview calendar subscription feed. */
+    calendarFeedToken: {
+      type: String,
+      trim: true,
+      default: "",
+      index: true
     }
   },
   { timestamps: true }

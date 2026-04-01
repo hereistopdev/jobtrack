@@ -304,6 +304,71 @@ export async function fetchInterviewCalendar(fromIso, toIso) {
   return res.json();
 }
 
+export async function fetchInterviewFeedLinks() {
+  const res = await fetch(`${API_BASE_URL}/interviews/feeds`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function rotateInterviewCombinedFeedToken() {
+  const res = await fetch(`${API_BASE_URL}/interviews/feeds/combined-token`, {
+    method: "POST",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+/** @param {{ view?: "all" }} opts */
+export async function fetchCalendarSources(opts = {}) {
+  const q = opts.view === "all" ? "?view=all" : "";
+  const res = await fetch(`${API_BASE_URL}/calendar-sources${q}`, { headers: { ...authHeaders() } });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
+export async function createCalendarSource(body) {
+  const res = await fetch(`${API_BASE_URL}/calendar-sources`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function deleteCalendarSource(id) {
+  const res = await fetch(`${API_BASE_URL}/calendar-sources/${id}`, {
+    method: "DELETE",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function syncCalendarSource(id) {
+  const res = await fetch(`${API_BASE_URL}/calendar-sources/${id}/sync`, {
+    method: "POST",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Sync failed (${res.status})`);
+  return data;
+}
+
+export async function syncAllCalendarSources() {
+  const res = await fetch(`${API_BASE_URL}/calendar-sources/sync-all`, {
+    method: "POST",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Sync all failed (${res.status})`);
+  return data;
+}
+
 export async function checkInterviewConflicts(body) {
   const res = await fetch(`${API_BASE_URL}/interviews/conflicts-check`, {
     method: "POST",

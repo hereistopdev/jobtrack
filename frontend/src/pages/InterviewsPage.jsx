@@ -12,12 +12,17 @@ import {
   YAxis
 } from "recharts";
 import {
+  createCalendarSource,
   createInterviewRecord,
+  deleteCalendarSource,
   deleteInterviewRecord,
+  fetchCalendarSources,
   fetchInterviewRecords,
   fetchInterviewSummary,
   importInterviewExcel,
   patchMyInterviewProfiles,
+  syncAllCalendarSources,
+  syncCalendarSource,
   updateInterviewRecord
 } from "../api";
 import { useAuth } from "../context/AuthContext";
@@ -120,12 +125,36 @@ export default function InterviewsPage() {
   const [selectedUserId, setSelectedUserId] = useState("");
   const [subjectPickUserId, setSubjectPickUserId] = useState("");
   const [interviewerPickId, setInterviewerPickId] = useState("");
+  const [calendarSources, setCalendarSources] = useState([]);
+  const [calendarSourcesLoading, setCalendarSourcesLoading] = useState(false);
+  const [calendarSourcesError, setCalendarSourcesError] = useState("");
+  const [calForm, setCalForm] = useState({ label: "", sourceType: "ics", icsUrl: "" });
+  const [calSaving, setCalSaving] = useState(false);
+  const [syncBusyId, setSyncBusyId] = useState("");
+  const [syncAllBusy, setSyncAllBusy] = useState(false);
+
+  const loadCalendarSources = useCallback(async () => {
+    setCalendarSourcesLoading(true);
+    setCalendarSourcesError("");
+    try {
+      const opts = user?.role === "admin" ? { view: "all" } : {};
+      const data = await fetchCalendarSources(opts);
+      setCalendarSources(data.sources || []);
+    } catch (e) {
+      setCalendarSourcesError(e.message || "Failed to load calendar sources");
+    } finally {
+      setCalendarSourcesLoading(false);
+    }
+  }, [user?.role]);
 
   const loadAll = useCallback(async () => {
     setLoading(true);
     setError("");
     try {
-      const [sum, rows] = await Promise.all([fetchInterviewSummary(), fetchInterviewRecords()]);
+      const [sum, rows] = await Promise.all([
+        fetchInterviewSummary(),
+        fetchInterviewRecords()
+      ]);
       setSummary(sum);
       setRecords(rows);
     } catch (e) {
@@ -283,7 +312,8 @@ export default function InterviewsPage() {
     () => [
       { id: "dashboard", label: "Dashboard" },
       { id: "entry", label: "Add or edit" },
-      { id: "records", label: "All records" }
+      { id: "records", label: "All records" },
+      { id: "calendars", label: "Calendar sync" }
     ],
     []
   );
@@ -291,6 +321,11 @@ export default function InterviewsPage() {
   useEffect(() => {
     dashPanelRef.current?.scrollTo?.(0, 0);
   }, [dashTab]);
+
+  useEffect(() => {
+    if (dashTab !== "calendars") return;
+    loadCalendarSources();
+  }, [dashTab, loadCalendarSources]);
 
   const handleFormChange = (field, value) => {
     setForm((prev) => ({ ...prev, [field]: value }));
@@ -430,6 +465,72 @@ export default function InterviewsPage() {
     setSubjectPickUserId("");
     setInterviewerPickId("");
     setForm(emptyForm());
+  };
+
+  const handleAddCalendarSource = async (e) => {
+    e.preventDefault();
+    if (!calForm.label.trim()) {
+      setError("Label is required.");
+      return;
+    }
+    if (!calForm.icsUrl.trim()) {
+      setError("ICS URL is required.");
+      return;
+    }
+    setCalSaving(true);
+    try {
+      await createCalendarSource({
+        label: calForm.label.trim(),
+        sourceType: calForm.sourceType,
+        icsUrl: calForm.icsUrl.trim()
+      });
+      setCalForm({ label: "", sourceType: "ics", icsUrl: "" });
+      await loadCalendarSources();
+      await loadAll();
+    } catch (err) {
+      setError(err.message || "Failed to add calendar source");
+    } finally {
+      setCalSaving(false);
+    }
+  };
+
+  const handleDeleteCalendarSource = async (id) => {
+    if (!window.confirm("Remove this source and delete all interviews imported from it?")) return;
+    try {
+      await deleteCalendarSource(id);
+      await loadCalendarSources();
+      await loadAll();
+    } catch (err) {
+      setError(err.message || "Failed to delete");
+    }
+  };
+
+  const handleSyncCalendarSource = async (id) => {
+    setSyncBusyId(id);
+    try {
+      await syncCalendarSource(id);
+      await loadCalendarSources();
+      await loadAll();
+    } catch (err) {
+      setError(err.message || "Sync failed");
+    } finally {
+      setSyncBusyId("");
+    }
+  };
+
+  const handleSyncAllCalendarSources = async () => {
+    if (user?.role !== "admin") return;
+    setSyncAllBusy(true);
+    setError("");
+    try {
+      await syncAllCalendarSources();
+      await loadCalendarSources();
+      await loadAll();
+    } catch (err) {
+      setError(err.message || "Sync all failed");
+    } finally {
+      setSyncAllBusy(false);
+    }
   };
 
   const handleSubmit = async (e) => {
@@ -1011,6 +1112,280 @@ export default function InterviewsPage() {
       </section>
             )}
 
+            {dashTab === "calendars" && (
+              <div className="interviews-calendar-sync-stack">
+                <section className="card">
+                  <h2 className="table-card-title">Import from external calendars</h2>
+                  <p className="muted-text">
+                    Add a secret ICS URL (from Google Calendar, Outlook, or any HTTPS feed). JobTrack polls it when you
+                    sync and creates interview rows for you—no OAuth required. Deleting a source removes its imported
+                    rows.
+                  </p>
+                  <div className="interviews-cal-instructions">
+                    <h3>How to sync team calendars into JobTrack</h3>
+                    <ol className="interviews-cal-steps-main">
+                      <li>
+                        In your email calendar, copy the private or publishable ICS URL (see provider details below).
+                      </li>
+                      <li>
+                        In JobTrack, enter a label, choose source type, paste the ICS URL, then click{" "}
+                        <strong>Add source</strong>.
+                      </li>
+                      <li>
+                        Click <strong>Sync now</strong> (or <strong>Sync all team sources</strong> if you are admin) to
+                        import events.
+                      </li>
+                      <li>
+                        Imported events appear in JobTrack and are attributed to the teammate who owns the source.
+                      </li>
+                    </ol>
+                    <p className="muted-text interviews-cal-tip">
+                      The URL should start with <code>https://</code> (if your app shows <code>webcal://</code>, replace
+                      that prefix with <code>https://</code>). Treat this link like a password—anyone with it can read
+                      your calendar feed.
+                    </p>
+
+                    <div className="interviews-cal-provider-list">
+                      <details className="interviews-cal-provider">
+                        <summary>Google Calendar (Gmail / Google Workspace)</summary>
+                        <ol>
+                          <li>Open Google Calendar in a browser (calendar.google.com).</li>
+                          <li>
+                            Click the gear icon → <strong>Settings</strong> (or <strong>See all settings</strong>).
+                          </li>
+                          <li>
+                            In the left column under <strong>Settings for my calendars</strong>, click the calendar you
+                            want (not “Events”).
+                          </li>
+                          <li>
+                            Scroll to <strong>Integrate calendar</strong> (or similar).
+                          </li>
+                          <li>
+                            Find <strong>Secret address in iCal format</strong> and copy the URL. That is your private
+                            ICS feed (often contains <code>calendar.google.com/calendar/ical/</code>).
+                          </li>
+                          <li>
+                            If you only see a “public” address, you can use that instead, but secret is preferred for
+                            privacy.
+                          </li>
+                        </ol>
+                      </details>
+
+                      <details className="interviews-cal-provider">
+                        <summary>Microsoft Outlook (Outlook.com / Microsoft 365)</summary>
+                        <ol>
+                          <li>Open Outlook on the web (outlook.office.com or outlook.live.com).</li>
+                          <li>
+                            Go to <strong>Settings</strong> (gear) → <strong>View all Outlook settings</strong> →{" "}
+                            <strong>Calendar</strong> → <strong>Shared calendars</strong> (wording may vary slightly).
+                          </li>
+                          <li>
+                            Look for <strong>Publish a calendar</strong> or <strong>Publish calendar</strong>, choose the
+                            calendar and permission (often “Can view all details” for a full feed).
+                          </li>
+                          <li>
+                            Create or reveal the link, then copy the <strong>ICS</strong> or subscription URL (HTTPS).
+                          </li>
+                          <li>
+                            Some work tenants disable publishing; if you do not see this, ask your admin or use another
+                            export method your org allows.
+                          </li>
+                        </ol>
+                      </details>
+
+                      <details className="interviews-cal-provider">
+                        <summary>Apple iCloud Calendar</summary>
+                        <ol>
+                          <li>
+                            On a Mac: open the Calendar app → select your calendar → <strong>Share Calendar</strong> (or
+                            right‑click the calendar).
+                          </li>
+                          <li>
+                            Enable <strong>Public Calendar</strong> if available, or share a read‑only link—Apple may show
+                            a <code>webcal://</code> URL.
+                          </li>
+                          <li>
+                            Copy the link and paste it into JobTrack after changing <code>webcal://</code> to{" "}
+                            <code>https://</code> if needed.
+                          </li>
+                          <li>
+                            Alternatively use{" "}
+                            <a href="https://www.icloud.com/calendar" target="_blank" rel="noopener noreferrer">
+                              icloud.com/calendar
+                            </a>{" "}
+                            in a browser, select the calendar, open sharing options, and copy the public/subscribe URL
+                            if shown.
+                          </li>
+                        </ol>
+                      </details>
+
+                      <details className="interviews-cal-provider">
+                        <summary>Proton Calendar</summary>
+                        <ol>
+                          <li>Open Proton Calendar (web or app) and select the calendar you want.</li>
+                          <li>
+                            Open calendar <strong>Settings</strong> or <strong>Details</strong> for that calendar (three
+                            dots / info icon, depending on client).
+                          </li>
+                          <li>
+                            Look for <strong>Subscribe</strong>, <strong>Calendar link</strong>, or{" "}
+                            <strong>Secret link</strong> / subscription URL for read‑only access—copy the HTTPS link.
+                          </li>
+                          <li>
+                            Plan and product UI differ; if no link appears, check Proton’s help for “subscribe” or
+                            “calendar URL” for your plan.
+                          </li>
+                        </ol>
+                      </details>
+
+                      <details className="interviews-cal-provider">
+                        <summary>Other (ICS / webcal / generic HTTPS feed)</summary>
+                        <ol>
+                          <li>
+                            Use this when your provider gives any HTTPS URL that serves an <code>.ics</code> calendar or
+                            states “iCal / ICS subscription”.
+                          </li>
+                          <li>
+                            Yahoo Calendar, Zoho, Fastmail, and others often have “Share” → “ICS” or “Subscribe” under
+                            calendar properties—copy that URL.
+                          </li>
+                          <li>If the feed only works on your office network or VPN, the JobTrack server must reach it.</li>
+                        </ol>
+                      </details>
+                    </div>
+                  </div>
+                  {user?.role === "admin" && (
+                    <div className="interviews-cal-admin-actions">
+                      <button
+                        type="button"
+                        className="small muted"
+                        disabled={syncAllBusy}
+                        onClick={handleSyncAllCalendarSources}
+                      >
+                        {syncAllBusy ? "Syncing all…" : "Sync all team sources"}
+                      </button>
+                    </div>
+                  )}
+                  <form className="interviews-cal-sync-form" onSubmit={handleAddCalendarSource}>
+                    <label className="form-field">
+                      <span>Label</span>
+                      <input
+                        value={calForm.label}
+                        onChange={(e) => setCalForm((p) => ({ ...p, label: e.target.value }))}
+                        placeholder="e.g. My Google work calendar"
+                        maxLength={200}
+                      />
+                    </label>
+                    <label className="form-field">
+                      <span>Source type</span>
+                      <select
+                        value={calForm.sourceType}
+                        onChange={(e) => setCalForm((p) => ({ ...p, sourceType: e.target.value }))}
+                        aria-label="External calendar type"
+                      >
+                        <option value="ics">ICS / webcal URL</option>
+                        <option value="google">Google (secret address in iCal format)</option>
+                        <option value="outlook">Outlook (publish ICS link)</option>
+                      </select>
+                    </label>
+                    <label className="form-field form-field-span2">
+                      <span>ICS URL</span>
+                      <input
+                        value={calForm.icsUrl}
+                        onChange={(e) => setCalForm((p) => ({ ...p, icsUrl: e.target.value }))}
+                        placeholder="https://…"
+                        autoComplete="off"
+                      />
+                    </label>
+                    <div className="interviews-cal-sync-form-actions">
+                      <button type="submit" className="primary" disabled={calSaving}>
+                        {calSaving ? "Adding…" : "Add source"}
+                      </button>
+                    </div>
+                  </form>
+                </section>
+
+                <section className="card">
+                  <h2 className="table-card-title">Your sources</h2>
+                  {calendarSourcesLoading && <p className="muted-text">Loading…</p>}
+                  {calendarSourcesError && <p className="error">{calendarSourcesError}</p>}
+                  {!calendarSourcesLoading && !calendarSources.length && (
+                    <p className="muted-text">No sources yet. Add an ICS URL above.</p>
+                  )}
+                  {calendarSources.length > 0 && (
+                    <div className="table-scroll-wrap">
+                      <table className="data-table">
+                        <thead>
+                          <tr>
+                            {user?.role === "admin" && <th>Owner</th>}
+                            <th>Label</th>
+                            <th>Type</th>
+                            <th>Imports as</th>
+                            <th>Last sync</th>
+                            <th>Events</th>
+                            <th aria-label="Actions" />
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {calendarSources.map((s) => (
+                            <tr key={s._id}>
+                              {user?.role === "admin" && (
+                                <td className="muted-cell">
+                                  {s.ownerName || s.ownerEmail || s.ownerId}
+                                </td>
+                              )}
+                              <td>{s.label}</td>
+                              <td>{s.sourceType}</td>
+                              <td className="muted-cell">{s.ownerName || s.ownerEmail || "—"}</td>
+                              <td className="muted-cell">
+                                {s.lastSyncedAt
+                                  ? new Date(s.lastSyncedAt).toLocaleString()
+                                  : "—"}
+                              </td>
+                              <td>{s.lastEventCount ?? "—"}</td>
+                              <td className="table-actions">
+                                <button
+                                  type="button"
+                                  className="small muted"
+                                  disabled={syncBusyId === s._id}
+                                  onClick={() => handleSyncCalendarSource(s._id)}
+                                >
+                                  {syncBusyId === s._id ? "Syncing…" : "Sync now"}
+                                </button>
+                                <button
+                                  type="button"
+                                  className="small danger"
+                                  disabled={syncBusyId === s._id}
+                                  onClick={() => handleDeleteCalendarSource(s._id)}
+                                >
+                                  Delete
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                  {calendarSources.some((s) => s.lastError) && (
+                    <div className="interviews-cal-sync-errors">
+                      <strong>Last errors</strong>
+                      <ul>
+                        {calendarSources
+                          .filter((s) => s.lastError)
+                          .map((s) => (
+                            <li key={`err-${s._id}`}>
+                              <span className="muted-text">{s.label}: </span>
+                              {s.lastError}
+                            </li>
+                          ))}
+                      </ul>
+                    </div>
+                  )}
+                </section>
+              </div>
+            )}
+
             {dashTab === "records" && (
       <section className="card table-card">
         <div className="table-toolbar">
@@ -1099,6 +1474,7 @@ export default function InterviewsPage() {
           </nav>
         </div>
       )}
+
     </main>
   );
 }

@@ -1,8 +1,11 @@
 import express from "express";
 import mongoose from "mongoose";
 import multer from "multer";
+import crypto from "crypto";
 import { InterviewRecord } from "../models/InterviewRecord.js";
-import { requireAuth } from "../middleware/auth.js";
+import { User } from "../models/User.js";
+import { SystemSetting, SYSTEM_SETTING_ID } from "../models/SystemSetting.js";
+import { requireAuth, requireAdmin } from "../middleware/auth.js";
 import { canModifyInterviewRecord } from "../utils/interviewPermissions.js";
 import { buildInterviewSummary } from "../utils/interviewSummary.js";
 import { importInterviewExcelBuffer } from "../utils/interviewExcelImport.js";
@@ -25,7 +28,256 @@ function serializeConflict(o) {
 }
 
 const router = express.Router();
+
+function ensureToken(v) {
+  return v && typeof v === "string" && v.trim() ? v.trim() : crypto.randomBytes(24).toString("hex");
+}
+
+function baseUrlFromReq(req) {
+  const proto = req.get("x-forwarded-proto") || req.protocol || "http";
+  const host = req.get("x-forwarded-host") || req.get("host");
+  return `${proto}://${host}`;
+}
+
+function icsEscape(v) {
+  return String(v ?? "")
+    .replace(/\\/g, "\\\\")
+    .replace(/\r?\n/g, "\\n")
+    .replace(/;/g, "\\;")
+    .replace(/,/g, "\\,");
+}
+
+function dtUtc(date) {
+  const d = date instanceof Date ? date : new Date(date);
+  const y = d.getUTCFullYear();
+  const m = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const hh = String(d.getUTCHours()).padStart(2, "0");
+  const mm = String(d.getUTCMinutes()).padStart(2, "0");
+  const ss = String(d.getUTCSeconds()).padStart(2, "0");
+  return `${y}${m}${day}T${hh}${mm}${ss}Z`;
+}
+
+async function renderUserInterviewIcs({ userDoc, feedBaseUrl }) {
+  const now = new Date();
+  const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const to = new Date(now.getTime() + 366 * 24 * 60 * 60 * 1000);
+  const uid = String(userDoc._id);
+  const rows = await InterviewRecord.find({
+    scheduledAt: { $lt: to },
+    $or: [{ subjectUserId: uid }, { createdBy: uid, subjectUserId: null }]
+  })
+    .sort({ scheduledAt: 1, _id: 1 })
+    .lean();
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//JobTrack//Interviews//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${icsEscape(userDoc.name || userDoc.email || "Team member")} - Interviews`,
+    "X-WR-TIMEZONE:UTC",
+    `X-PUBLISHED-TTL:PT15M`
+  ];
+
+  for (const r of rows) {
+    const start = new Date(r.scheduledAt);
+    const end = resolveScheduledEnd(start, r.scheduledEndAt);
+    if (start < from || start > to) continue;
+    const summary = `${r.subjectName || "Interview"} - ${r.company || ""}`.trim();
+    const desc = [
+      r.roleTitle ? `Role: ${r.roleTitle}` : "",
+      r.interviewType ? `Type: ${r.interviewType}` : "",
+      r.resultStatus ? `Result: ${r.resultStatus}` : "",
+      r.interviewerName ? `Interviewer: ${r.interviewerName}` : "",
+      r.notes ? `Notes: ${r.notes}` : "",
+      r.jobLinkUrl ? `Job link: ${r.jobLinkUrl}` : "",
+      `Source: ${feedBaseUrl}`
+    ]
+      .filter(Boolean)
+      .join("\n");
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:${r._id}@jobtrack`);
+    lines.push(`DTSTAMP:${dtUtc(now)}`);
+    lines.push(`DTSTART:${dtUtc(start)}`);
+    lines.push(`DTEND:${dtUtc(end)}`);
+    lines.push(`SUMMARY:${icsEscape(summary)}`);
+    if (desc) lines.push(`DESCRIPTION:${icsEscape(desc)}`);
+    if (r.contactInfo) lines.push(`LOCATION:${icsEscape(r.contactInfo)}`);
+    lines.push("END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  return `${lines.join("\r\n")}\r\n`;
+}
+
+async function getOrCreateCombinedToken() {
+  let doc = await SystemSetting.findById(SYSTEM_SETTING_ID).lean();
+  if (!doc) {
+    const tok = ensureToken("");
+    await SystemSetting.create({ _id: SYSTEM_SETTING_ID, combinedCalendarFeedToken: tok });
+    return tok;
+  }
+  if (!doc.combinedCalendarFeedToken) {
+    const tok = ensureToken("");
+    await SystemSetting.updateOne({ _id: SYSTEM_SETTING_ID }, { $set: { combinedCalendarFeedToken: tok } });
+    return tok;
+  }
+  return doc.combinedCalendarFeedToken;
+}
+
+/** All team interviews in one ICS (subscribe once for the whole org). */
+async function renderCombinedIcs({ feedBaseUrl }) {
+  const now = new Date();
+  const from = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+  const to = new Date(now.getTime() + 366 * 24 * 60 * 60 * 1000);
+  const rows = await InterviewRecord.find({
+    scheduledAt: { $lt: to }
+  })
+    .sort({ scheduledAt: 1, _id: 1 })
+    .lean();
+
+  const lines = [
+    "BEGIN:VCALENDAR",
+    "VERSION:2.0",
+    "PRODID:-//JobTrack//Interviews//EN",
+    "CALSCALE:GREGORIAN",
+    "METHOD:PUBLISH",
+    `X-WR-CALNAME:${icsEscape("JobTrack — Team interviews")}`,
+    "X-WR-TIMEZONE:UTC",
+    "X-PUBLISHED-TTL:PT15M"
+  ];
+
+  for (const r of rows) {
+    const start = new Date(r.scheduledAt);
+    const end = resolveScheduledEnd(start, r.scheduledEndAt);
+    if (start < from || start > to) continue;
+    const summary = `${r.subjectName || "Interview"} - ${r.company || ""}`.trim();
+    const desc = [
+      r.roleTitle ? `Role: ${r.roleTitle}` : "",
+      r.interviewType ? `Type: ${r.interviewType}` : "",
+      r.resultStatus ? `Result: ${r.resultStatus}` : "",
+      r.interviewerName ? `Interviewer: ${r.interviewerName}` : "",
+      r.notes ? `Notes: ${r.notes}` : "",
+      r.jobLinkUrl ? `Job link: ${r.jobLinkUrl}` : "",
+      `Source: ${feedBaseUrl}`
+    ]
+      .filter(Boolean)
+      .join("\n");
+    lines.push("BEGIN:VEVENT");
+    lines.push(`UID:${r._id}@jobtrack`);
+    lines.push(`DTSTAMP:${dtUtc(now)}`);
+    lines.push(`DTSTART:${dtUtc(start)}`);
+    lines.push(`DTEND:${dtUtc(end)}`);
+    lines.push(`SUMMARY:${icsEscape(summary)}`);
+    if (desc) lines.push(`DESCRIPTION:${icsEscape(desc)}`);
+    if (r.contactInfo) lines.push(`LOCATION:${icsEscape(r.contactInfo)}`);
+    lines.push("END:VEVENT");
+  }
+  lines.push("END:VCALENDAR");
+  return `${lines.join("\r\n")}\r\n`;
+}
+
+/** Public combined team ICS (must be registered before /feed/:token so "combined" is not captured as a user token). */
+router.get("/feed/combined/:token.ics", async (req, res) => {
+  try {
+    const token = String(req.params.token || "").trim();
+    if (!token) return res.status(404).send("Not found");
+    const doc = await SystemSetting.findById(SYSTEM_SETTING_ID).lean();
+    if (!doc || doc.combinedCalendarFeedToken !== token) return res.status(404).send("Not found");
+    const feedBaseUrl = `${baseUrlFromReq(req)}/api/interviews/feed/combined/${token}.ics`;
+    const ics = await renderCombinedIcs({ feedBaseUrl });
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(ics);
+  } catch (error) {
+    res.status(500).send(`Failed to render feed: ${error.message}`);
+  }
+});
+
+/** Public tokenized ICS feed for calendar subscriptions. */
+router.get("/feed/:token.ics", async (req, res) => {
+  try {
+    const token = String(req.params.token || "").trim();
+    if (!token) return res.status(404).send("Not found");
+    const user = await User.findOne({ calendarFeedToken: token }).select("email name").lean();
+    if (!user) return res.status(404).send("Not found");
+    const feedBaseUrl = `${baseUrlFromReq(req)}/api/interviews/feed/${token}.ics`;
+    const ics = await renderUserInterviewIcs({ userDoc: user, feedBaseUrl });
+    res.setHeader("Content-Type", "text/calendar; charset=utf-8");
+    res.setHeader("Cache-Control", "no-store");
+    res.send(ics);
+  } catch (error) {
+    res.status(500).send(`Failed to render feed: ${error.message}`);
+  }
+});
+
 router.use(requireAuth);
+
+router.get("/feeds", async (req, res) => {
+  try {
+    const me = await User.findById(req.user.id).select("email name calendarFeedToken").lean();
+    if (!me) return res.status(401).json({ message: "User not found" });
+
+    const myToken = ensureToken(me.calendarFeedToken);
+    if (myToken !== (me.calendarFeedToken || "")) {
+      await User.updateOne({ _id: me._id }, { $set: { calendarFeedToken: myToken } });
+    }
+    const base = baseUrlFromReq(req);
+    const own = {
+      userId: me._id.toString(),
+      email: me.email || "",
+      name: me.name || "",
+      url: `${base}/api/interviews/feed/${myToken}.ics`
+    };
+
+    let team = [];
+    if (req.user.role === "admin") {
+      const users = await User.find().select("email name calendarFeedToken").sort({ email: 1 }).lean();
+      const ops = [];
+      team = users.map((u) => {
+        const tok = ensureToken(u.calendarFeedToken);
+        if (tok !== (u.calendarFeedToken || "")) {
+          ops.push({
+            updateOne: { filter: { _id: u._id }, update: { $set: { calendarFeedToken: tok } } }
+          });
+        }
+        return {
+          userId: u._id.toString(),
+          email: u.email || "",
+          name: u.name || "",
+          url: `${base}/api/interviews/feed/${tok}.ics`
+        };
+      });
+      if (ops.length) await User.bulkWrite(ops);
+    }
+
+    const combinedToken = await getOrCreateCombinedToken();
+    const combined = {
+      url: `${base}/api/interviews/feed/combined/${combinedToken}.ics`
+    };
+
+    res.json({ own, team, combined });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load feed links", error: error.message });
+  }
+});
+
+/** Regenerate the team combined ICS URL (invalidates old subscriptions). Admin only. */
+router.post("/feeds/combined-token", requireAdmin, async (req, res) => {
+  try {
+    const tok = ensureToken("");
+    await SystemSetting.findOneAndUpdate(
+      { _id: SYSTEM_SETTING_ID },
+      { $set: { combinedCalendarFeedToken: tok } },
+      { upsert: true, new: true }
+    );
+    const base = baseUrlFromReq(req);
+    res.json({ url: `${base}/api/interviews/feed/combined/${tok}.ics` });
+  } catch (error) {
+    res.status(500).json({ message: "Failed to rotate combined feed token", error: error.message });
+  }
+});
 
 const upload = multer({
   storage: multer.memoryStorage(),

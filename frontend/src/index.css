@@ -1900,6 +1900,209 @@ th {
   color: #374151;
 }
 
+.interviews-feed-card {
+  margin-bottom: 12px;
+}
+
+.interviews-feed-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.interviews-feed-head-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+
+.interviews-feed-combined-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.interviews-calendar-sync-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.interviews-cal-sync-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px 16px;
+  margin-top: 12px;
+}
+
+.interviews-cal-instructions {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.interviews-cal-instructions h3 {
+  margin: 0 0 8px;
+  font-size: 0.92rem;
+  color: #1f2937;
+}
+
+.interviews-cal-instructions ol {
+  margin: 0 0 8px 18px;
+  padding: 0;
+  font-size: 0.84rem;
+  color: #374151;
+  line-height: 1.45;
+}
+
+.interviews-cal-steps-main {
+  margin-bottom: 10px;
+}
+
+.interviews-cal-tip {
+  margin: 0 0 12px;
+  font-size: 0.82rem;
+  line-height: 1.45;
+}
+
+.interviews-cal-tip code {
+  font-size: 0.78em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+.interviews-cal-provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.interviews-cal-provider {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 0 10px;
+  background: #fff;
+}
+
+.interviews-cal-provider summary {
+  cursor: pointer;
+  padding: 10px 4px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: #1e3a8a;
+  list-style: none;
+}
+
+.interviews-cal-provider summary::-webkit-details-marker {
+  display: none;
+}
+
+.interviews-cal-provider summary::before {
+  content: "▸";
+  display: inline-block;
+  margin-right: 8px;
+  transition: transform 0.15s ease;
+  color: #64748b;
+}
+
+.interviews-cal-provider[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.interviews-cal-provider ol {
+  margin: 0 0 12px 18px;
+  padding: 0;
+  font-size: 0.8rem;
+  color: #4b5563;
+  line-height: 1.5;
+}
+
+.interviews-cal-provider li {
+  margin-bottom: 6px;
+}
+
+.interviews-cal-provider code {
+  font-size: 0.78em;
+  padding: 1px 4px;
+  border-radius: 4px;
+  background: #f1f5f9;
+  color: #0f172a;
+}
+
+.interviews-cal-provider a {
+  color: #2563eb;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.interviews-cal-sync-form .form-field-span2 {
+  grid-column: 1 / -1;
+}
+
+.interviews-cal-sync-form-actions {
+  grid-column: 1 / -1;
+}
+
+.interviews-cal-sync-errors {
+  margin-top: 12px;
+  font-size: 0.85rem;
+  color: #b91c1c;
+}
+
+.interviews-cal-sync-errors ul {
+  margin: 6px 0 0 18px;
+  padding: 0;
+}
+
+.interviews-subscribe-help-modal {
+  max-width: 520px;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.interviews-subscribe-help-steps h3 {
+  margin: 12px 0 6px;
+  font-size: 0.9rem;
+}
+
+.interviews-subscribe-help-steps ol {
+  margin: 0 0 8px 16px;
+  padding: 0;
+  font-size: 0.82rem;
+  color: #4b5563;
+  line-height: 1.45;
+}
+
+.interviews-feed-url {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  background: #f9fafb;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
+}
+
+.interviews-feed-team-list {
+  margin-top: 12px;
+}
+
+.interviews-feed-url-cell {
+  max-width: 360px;
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 0.74rem;
+  overflow-wrap: anywhere;
+}
+
 .finance-form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
