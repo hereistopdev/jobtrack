@@ -5,7 +5,7 @@ import { fetchInterviewCalendar } from "../api";
 import TimeZoneCombobox from "../components/TimeZoneCombobox";
 import { getInterviewStageBadge } from "../utils/interviewStage";
 import { effectiveEndMs, rangesOverlap } from "../utils/interviewTime";
-import { buildOwnerPaletteMaps, DEFAULT_OWNER_COLOR, ownerKey } from "../utils/interviewOwnerColors";
+import { buildOwnerPaletteMaps, eventCalendarStyle } from "../utils/interviewOwnerColors";
 import {
   CALENDAR_DEFAULT_TZ,
   formatTimeZoneOptionLabel,
@@ -551,7 +551,7 @@ export default function InterviewCalendarPage() {
   }, [selectedEv]);
 
   const modalOwnerColor = selectedEv
-    ? ownerPalette.colorByKey.get(ownerKey(selectedEv)) || DEFAULT_OWNER_COLOR
+    ? eventCalendarStyle(selectedEv, ownerPalette)
     : null;
 
   return (
@@ -659,7 +659,7 @@ export default function InterviewCalendarPage() {
                       </button>
                       <div className="interview-cal-month-events">
                         {shown.map((ev) => {
-                          const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
+                          const col = eventCalendarStyle(ev, ownerPalette);
                           const oid = stableInterviewId(ev);
                           return (
                             <button
@@ -825,7 +825,7 @@ export default function InterviewCalendarPage() {
                               const st = eventBlockStyle(clip);
                               const oid = stableInterviewId(ev);
                               const bad = overlapIdsByDay.get(key)?.has(oid) ?? false;
-                              const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
+                              const col = eventCalendarStyle(ev, ownerPalette);
                               const hasStage = Boolean(getInterviewStageBadge(ev.interviewType));
                               return (
                                 <div
@@ -889,7 +889,7 @@ export default function InterviewCalendarPage() {
                                   if (!clip) return null;
                                   const st = eventBlockStyle(clip);
                                   const oid = stableInterviewId(ev);
-                                  const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
+                                  const col = eventCalendarStyle(ev, ownerPalette);
                                   const offsetTop = st.top - item.wrapperTop;
                                   const hasStage = Boolean(getInterviewStageBadge(ev.interviewType));
                                   return (

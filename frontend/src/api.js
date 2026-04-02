@@ -49,18 +49,34 @@ export async function fetchMe(token) {
   return res.json();
 }
 
-/** Replace saved interview profile labels for the current user (used for datalist suggestions). */
 export async function fetchTeamDirectory() {
   const res = await fetch(`${API_BASE_URL}/users/directory`, { headers: { ...authHeaders() } });
   if (!res.ok) throw new Error(await parseJsonError(res));
   return res.json();
 }
 
-export async function patchMyInterviewProfiles(interviewProfiles) {
+/** PATCH /auth/me — pass any of: name, jobProfiles, interviewProfiles (legacy label list). */
+export async function patchMyProfile(body) {
   const res = await fetch(`${API_BASE_URL}/auth/me`, {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
-    body: JSON.stringify({ interviewProfiles })
+    body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+/** @deprecated Prefer managing job profiles on Profile; kept for minimal label-only updates. */
+export async function patchMyInterviewProfiles(interviewProfiles) {
+  return patchMyProfile({ interviewProfiles });
+}
+
+export async function changeMyPassword(currentPassword, newPassword) {
+  const res = await fetch(`${API_BASE_URL}/auth/change-password`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...authHeaders() },
+    body: JSON.stringify({ currentPassword, newPassword })
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);

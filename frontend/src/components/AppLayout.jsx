@@ -45,6 +45,9 @@ export default function AppLayout() {
           )}
         </nav>
         <div className="app-nav-spacer" />
+        <NavLink to="/profile" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
+          Profile
+        </NavLink>
         <span className="app-nav-user" title={user?.email}>
           {user?.name ? `${user.name}` : user?.email}
           {isAdmin && <span className="app-nav-badge">admin</span>}

@@ -21,7 +21,7 @@ import {
   fetchInterviewSummary,
   importInterviewExcel,
   parseJobLinkFromUrl,
-  patchMyInterviewProfiles,
+  patchMyProfile,
   syncAllCalendarSources,
   syncCalendarSource,
   updateInterviewRecord
@@ -84,7 +84,8 @@ const emptyForm = () => {
   notes: "",
   jobLinkUrl: "",
   interviewerName: "",
-  contactInfo: ""
+  contactInfo: "",
+  jobProfileId: ""
   };
 };
 
@@ -111,6 +112,12 @@ function formatTimeRange(row) {
 export default function InterviewsPage() {
   const { user, refreshUser } = useAuth();
   const { members: teamMembers, loading: teamDirLoading, error: teamDirError } = useTeamDirectory();
+  const [subjectPickUserId, setSubjectPickUserId] = useState("");
+  const selectedSubjectProfiles = useMemo(() => {
+    if (!subjectPickUserId) return [];
+    const m = teamMembers.find((x) => x.id === subjectPickUserId);
+    return Array.isArray(m?.jobProfiles) ? m.jobProfiles : [];
+  }, [subjectPickUserId, teamMembers]);
   const [summary, setSummary] = useState(null);
   const [records, setRecords] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -124,7 +131,6 @@ export default function InterviewsPage() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [sort, setSort] = useState({ key: "scheduledAt", dir: "desc" });
   const [selectedUserId, setSelectedUserId] = useState("");
-  const [subjectPickUserId, setSubjectPickUserId] = useState("");
   const [interviewerPickId, setInterviewerPickId] = useState("");
   const [calendarSources, setCalendarSources] = useState([]);
   const [calendarSourcesLoading, setCalendarSourcesLoading] = useState(false);
@@ -352,11 +358,13 @@ export default function InterviewsPage() {
     const im = teamMembers.find((m) => m.displayName === iname);
     setInterviewerPickId(im ? im.id : "");
     const tz = (row.timezone || "").trim() || getDefaultTimeZone();
+    const jpid = row.jobProfileId ? String(row.jobProfileId) : "";
     setForm({
       subjectName: row.subjectName || "",
       company: row.company || "",
       roleTitle: row.roleTitle || "",
       profile: row.profile || "",
+      jobProfileId: jpid,
       stack: row.stack || "",
       timezone: tz,
       scheduledAt: utcToZonedLocalString(row.scheduledAt, tz),
@@ -617,6 +625,11 @@ export default function InterviewsPage() {
             ? { subjectUserId: subjectPickUserId }
             : {};
       const baseBody = { ...payload, ...subjectUserPayload };
+      if (form.jobProfileId) {
+        baseBody.jobProfileId = form.jobProfileId;
+      } else if (editingId && subjectPickUserId && selectedSubjectProfiles.length) {
+        baseBody.jobProfileId = null;
+      }
 
       const runSave = async (skipOverlapCheck) => {
         const body = skipOverlapCheck ? { ...baseBody, skipOverlapCheck: true } : baseBody;
@@ -662,11 +675,11 @@ export default function InterviewsPage() {
         }
       }
 
-      if (payload.profile) {
+      if (payload.profile && subjectPickUserId === user?.id) {
         const list = user?.interviewProfiles || [];
         if (user && !list.includes(payload.profile)) {
           try {
-            await patchMyInterviewProfiles([...list, payload.profile]);
+            await patchMyProfile({ interviewProfiles: [...list, payload.profile] });
             await refreshUser();
           } catch {
             /* optional save of profile label */
@@ -974,10 +987,14 @@ export default function InterviewsPage() {
               onChange={(e) => {
                 const id = e.target.value;
                 setSubjectPickUserId(id);
-                if (id) {
-                  const m = teamMembers.find((x) => x.id === id);
-                  if (m) handleFormChange("subjectName", m.displayName);
-                }
+                setForm((prev) => {
+                  const next = { ...prev, jobProfileId: "" };
+                  if (id) {
+                    const m = teamMembers.find((x) => x.id === id);
+                    if (m) next.subjectName = m.displayName;
+                  }
+                  return next;
+                });
               }}
               aria-label="Choose subject from team"
             >
@@ -1060,21 +1077,66 @@ export default function InterviewsPage() {
               aria-label="Interview end"
             />
           </label>
-          <label className="form-field">
+          {selectedSubjectProfiles.length > 0 ? (
+            <label className="form-field form-field-span2">
+              <span>Job apply profile</span>
+              <select
+                value={form.jobProfileId}
+                onChange={(e) => {
+                  const id = e.target.value;
+                  if (!id) {
+                    setForm((prev) => ({ ...prev, jobProfileId: "" }));
+                    return;
+                  }
+                  const p = selectedSubjectProfiles.find((x) => x.id === id);
+                  if (p) setForm((prev) => ({ ...prev, jobProfileId: id, profile: p.label }));
+                }}
+                aria-label="Choose saved job profile for subject"
+              >
+                <option value="">Custom label (type below)</option>
+                {selectedSubjectProfiles.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : null}
+          <label className="form-field form-field-span2">
             <span>Profile</span>
             <input
-              list="interview-profile-options"
+              list={selectedSubjectProfiles.length ? "subject-profile-labels" : "interview-profile-options"}
               value={form.profile}
-              onChange={(e) => handleFormChange("profile", e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value;
+                setForm((prev) => {
+                  let jid = prev.jobProfileId;
+                  if (jid) {
+                    const m = selectedSubjectProfiles.find((x) => x.id === jid);
+                    if (m && m.label.trim() !== v.trim()) jid = "";
+                  }
+                  return { ...prev, profile: v, jobProfileId: jid };
+                });
+              }}
               placeholder="e.g. Frontend, Staff, Contract"
             />
-            <datalist id="interview-profile-options">
-              {(user?.interviewProfiles || []).map((p) => (
-                <option key={p} value={p} />
-              ))}
-            </datalist>
+            {selectedSubjectProfiles.length > 0 ? (
+              <datalist id="subject-profile-labels">
+                {selectedSubjectProfiles.map((p) => (
+                  <option key={p.id} value={p.label} />
+                ))}
+              </datalist>
+            ) : (
+              <datalist id="interview-profile-options">
+                {(user?.interviewProfiles || []).map((p) => (
+                  <option key={p} value={p} />
+                ))}
+              </datalist>
+            )}
             <span className="muted-text" style={{ fontSize: "0.75rem" }}>
-              You can maintain several profiles; picking a new name saves it to your list for next time.
+              {selectedSubjectProfiles.length > 0
+                ? "Pick a saved profile above or type a custom label. Colors are set on the subject’s Profile page."
+                : "Maintain your own profile list on Profile. You can type any label; suggestions use your saved names."}
             </span>
           </label>
           <label className="form-field">
