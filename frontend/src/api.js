@@ -81,9 +81,14 @@ export async function uploadProfileResume(profileId, file) {
   return data;
 }
 
-export async function uploadProfileIdDocument(profileId, file, kind) {
+/** One or more images/PDFs; field name `files` */
+export async function uploadProfileIdDocuments(profileId, files, kind) {
+  const list = Array.isArray(files) ? files : [files];
+  if (!list.length) throw new Error("No files selected");
   const fd = new FormData();
-  fd.append("file", file);
+  for (const f of list) {
+    fd.append("files", f);
+  }
   fd.append("kind", kind);
   const res = await fetch(`${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/id-documents`, {
     method: "POST",
@@ -95,9 +100,18 @@ export async function uploadProfileIdDocument(profileId, file, kind) {
   return data;
 }
 
-export async function uploadProfileOtherDocument(profileId, file, category, label) {
+export async function uploadProfileIdDocument(profileId, file, kind) {
+  return uploadProfileIdDocuments(profileId, [file], kind);
+}
+
+/** One or more images/PDFs; field name `files` */
+export async function uploadProfileOtherDocuments(profileId, files, category, label) {
+  const list = Array.isArray(files) ? files : [files];
+  if (!list.length) throw new Error("No files selected");
   const fd = new FormData();
-  fd.append("file", file);
+  for (const f of list) {
+    fd.append("files", f);
+  }
   fd.append("category", category);
   fd.append("label", label || "");
   const res = await fetch(`${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/other-documents`, {
@@ -108,6 +122,10 @@ export async function uploadProfileOtherDocument(profileId, file, category, labe
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `Upload failed (${res.status})`);
   return data;
+}
+
+export async function uploadProfileOtherDocument(profileId, file, category, label) {
+  return uploadProfileOtherDocuments(profileId, [file], category, label);
 }
 
 export async function deleteProfileResumeFile(profileId) {

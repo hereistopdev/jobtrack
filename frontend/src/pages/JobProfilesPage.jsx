@@ -7,10 +7,11 @@ import {
   fetchProfileFileBlob,
   patchMyProfile,
   triggerBlobDownload,
-  uploadProfileIdDocument,
-  uploadProfileOtherDocument,
+  uploadProfileIdDocuments,
+  uploadProfileOtherDocuments,
   uploadProfileResume
 } from "../api";
+import ProfileDocumentThumb from "../components/ProfileDocumentThumb.jsx";
 import { useAuth } from "../context/AuthContext";
 import {
   CALENDAR_PROFILE_COLOR_PALETTE,
@@ -213,9 +214,17 @@ export default function JobProfilesPage() {
     setUploadKey(key);
     setError("");
     try {
-      await fn();
+      const data = await fn();
       await refreshUser();
-      setMsg("Updated.");
+      if (data?.extractedChars != null) {
+        setMsg(
+          `Resume uploaded (${data.extractedChars} characters). Parsed ${data.parsedExperiences ?? 0} experience block(s) and ${data.parsedUniversities ?? 0} education block(s) where section headings were found.`
+        );
+      } else if (typeof data?.message === "string" && data.message) {
+        setMsg(data.message);
+      } else {
+        setMsg("Updated.");
+      }
     } catch (err) {
       setError(err.message || "Upload failed");
     } finally {
@@ -554,8 +563,9 @@ export default function JobProfilesPage() {
 
                 <h3 className="job-profile-section-title form-field-span2">Resume file & text</h3>
                 <p className="form-field-span2 muted-text small" style={{ margin: 0 }}>
-                  Upload PDF, DOCX, or TXT — text is extracted into the resume field below (replacing previous extracted
-                  text). Save the profile first, then upload.
+                  Upload PDF, DOCX, or TXT — text is extracted into the resume field, and experience/education sections
+                  are parsed when the file uses common section titles (e.g. &quot;Experience&quot;, &quot;Education&quot;).
+                  Save the profile first, then upload.
                 </p>
                 {row.id ? (
                   <div className="form-field-span2 job-profile-upload-row">
@@ -644,50 +654,59 @@ export default function JobProfilesPage() {
                       </select>
                       <input
                         type="file"
+                        multiple
                         accept="image/jpeg,image/png,image/webp,application/pdf"
                         disabled={!!uploadKey}
                         onChange={(e) => {
-                          const f = e.target.files?.[0];
+                          const list = e.target.files;
                           const kind = document.getElementById(`id-kind-${idx}`)?.value || "other";
                           e.target.value = "";
-                          if (!f) return;
-                          runUpload(`id-${idx}`, () => uploadProfileIdDocument(row.id, f, kind));
+                          if (!list?.length) return;
+                          runUpload(`id-${idx}`, () =>
+                            uploadProfileIdDocuments(row.id, Array.from(list), kind)
+                          );
                         }}
                       />
                     </div>
-                    <ul className="job-profile-doc-list">
+                    <div className="job-profile-doc-grid">
                       {(row.idDocuments || []).map((d) => (
-                        <li key={d.id}>
-                          <span>
-                            {ID_KIND_OPTIONS.find((x) => x.value === d.kind)?.label || d.kind} —{" "}
-                            {d.originalName || "file"}
-                          </span>
-                          <button
-                            type="button"
-                            className="small muted"
-                            disabled={!!uploadKey}
-                            onClick={() =>
-                              runUpload(`idl-${d.id}`, async () => {
-                                const blob = await fetchProfileFileBlob(row.id, { type: "id", docId: d.id });
-                                triggerBlobDownload(blob, d.originalName || "id-document");
-                              })
-                            }
-                          >
-                            Download
-                          </button>
-                          <button
-                            type="button"
-                            className="small muted"
-                            disabled={!!uploadKey}
-                            onClick={() =>
-                              runUpload(`idr-${d.id}`, () => deleteProfileIdDocument(row.id, d.id))
-                            }
-                          >
-                            Delete
-                          </button>
-                        </li>
+                        <div key={d.id} className="job-profile-doc-card">
+                          <ProfileDocumentThumb
+                            profileId={row.id}
+                            docType="id"
+                            docId={d.id}
+                            mimeType={d.mimeType}
+                            title={ID_KIND_OPTIONS.find((x) => x.value === d.kind)?.label || d.kind}
+                          />
+                          <div className="job-profile-doc-actions">
+                            <span className="muted-text small">{d.originalName || "file"}</span>
+                            <button
+                              type="button"
+                              className="small muted"
+                              disabled={!!uploadKey}
+                              onClick={() =>
+                                runUpload(`idl-${d.id}`, async () => {
+                                  const blob = await fetchProfileFileBlob(row.id, { type: "id", docId: d.id });
+                                  triggerBlobDownload(blob, d.originalName || "id-document");
+                                })
+                              }
+                            >
+                              Download
+                            </button>
+                            <button
+                              type="button"
+                              className="small muted"
+                              disabled={!!uploadKey}
+                              onClick={() =>
+                                runUpload(`idr-${d.id}`, () => deleteProfileIdDocument(row.id, d.id))
+                              }
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 ) : (
                   <p className="form-field-span2 muted-text small">Save the profile to upload ID documents.</p>
@@ -713,51 +732,63 @@ export default function JobProfilesPage() {
                       />
                       <input
                         type="file"
+                        multiple
                         accept="image/jpeg,image/png,image/webp,application/pdf"
                         disabled={!!uploadKey}
                         onChange={(e) => {
-                          const f = e.target.files?.[0];
+                          const list = e.target.files;
                           const category = document.getElementById(`other-cat-${idx}`)?.value || "other";
                           const label = document.getElementById(`other-label-${idx}`)?.value || "";
                           e.target.value = "";
-                          if (!f) return;
-                          runUpload(`oth-${idx}`, () => uploadProfileOtherDocument(row.id, f, category, label));
+                          if (!list?.length) return;
+                          runUpload(`oth-${idx}`, () =>
+                            uploadProfileOtherDocuments(row.id, Array.from(list), category, label)
+                          );
                         }}
                       />
                     </div>
-                    <ul className="job-profile-doc-list">
+                    <div className="job-profile-doc-grid">
                       {(row.otherDocuments || []).map((d) => (
-                        <li key={d.id}>
-                          <span>
-                            {OTHER_DOC_OPTIONS.find((x) => x.value === d.category)?.label || d.category}
-                            {d.label ? ` — ${d.label}` : ""} — {d.originalName || "file"}
-                          </span>
-                          <button
-                            type="button"
-                            className="small muted"
-                            disabled={!!uploadKey}
-                            onClick={() =>
-                              runUpload(`odl-${d.id}`, async () => {
-                                const blob = await fetchProfileFileBlob(row.id, { type: "other", docId: d.id });
-                                triggerBlobDownload(blob, d.originalName || "document");
-                              })
+                        <div key={d.id} className="job-profile-doc-card">
+                          <ProfileDocumentThumb
+                            profileId={row.id}
+                            docType="other"
+                            docId={d.id}
+                            mimeType={d.mimeType}
+                            title={
+                              (OTHER_DOC_OPTIONS.find((x) => x.value === d.category)?.label || d.category) +
+                              (d.label ? ` — ${d.label}` : "")
                             }
-                          >
-                            Download
-                          </button>
-                          <button
-                            type="button"
-                            className="small muted"
-                            disabled={!!uploadKey}
-                            onClick={() =>
-                              runUpload(`odr-${d.id}`, () => deleteProfileOtherDocument(row.id, d.id))
-                            }
-                          >
-                            Delete
-                          </button>
-                        </li>
+                          />
+                          <div className="job-profile-doc-actions">
+                            <span className="muted-text small">{d.originalName || "file"}</span>
+                            <button
+                              type="button"
+                              className="small muted"
+                              disabled={!!uploadKey}
+                              onClick={() =>
+                                runUpload(`odl-${d.id}`, async () => {
+                                  const blob = await fetchProfileFileBlob(row.id, { type: "other", docId: d.id });
+                                  triggerBlobDownload(blob, d.originalName || "document");
+                                })
+                              }
+                            >
+                              Download
+                            </button>
+                            <button
+                              type="button"
+                              className="small muted"
+                              disabled={!!uploadKey}
+                              onClick={() =>
+                                runUpload(`odr-${d.id}`, () => deleteProfileOtherDocument(row.id, d.id))
+                              }
+                            >
+                              Delete
+                            </button>
+                          </div>
+                        </div>
                       ))}
-                    </ul>
+                    </div>
                   </div>
                 ) : (
                   <p className="form-field-span2 muted-text small">Save the profile to upload diplomas, transcripts, etc.</p>
