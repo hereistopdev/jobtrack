@@ -2314,10 +2314,52 @@ th {
   background: #f9fafb;
 }
 
-.interview-cal-gcal-corner {
-  width: 56px;
+.interview-cal-gcal-timezone-heads {
+  display: flex;
+  flex-shrink: 0;
+  width: 104px;
+  border-right: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.interview-cal-gcal-tz-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 6px 4px;
+  font-size: 0.65rem;
+  color: #4b5563;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.interview-cal-gcal-tz-head--reference {
+  width: 48px;
   flex-shrink: 0;
   border-right: 1px solid #e5e7eb;
+  background: #f3f4f6;
+}
+
+.interview-cal-gcal-tz-head--view {
+  width: 56px;
+  flex-shrink: 0;
+}
+
+.interview-cal-gcal-tz-head-abbr {
+  font-weight: 700;
+  font-size: 0.6rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #374151;
+}
+
+.interview-cal-gcal-tz-head-now {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+  color: #111827;
+  font-size: 0.7rem;
 }
 
 .interview-cal-gcal-head-cell {
@@ -2370,7 +2412,7 @@ th {
 .interview-cal-now-line::before {
   content: "";
   position: absolute;
-  left: 19px;
+  left: 26px;
   top: 50%;
   transform: translateY(-50%);
   width: 10px;
@@ -2386,10 +2428,18 @@ th {
 }
 
 .interview-cal-time-gutter {
-  width: 56px;
   flex-shrink: 0;
   border-right: 1px solid #e5e7eb;
   background: #fafafa;
+}
+
+.interview-cal-time-gutter--reference {
+  width: 48px;
+  background: #f3f4f6;
+}
+
+.interview-cal-time-gutter--view {
+  width: 56px;
 }
 
 .interview-cal-time-row {
@@ -2414,6 +2464,12 @@ th {
   color: #6b7280;
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.interview-cal-time-label--compact {
+  right: 4px;
+  font-size: 0.58rem;
+  letter-spacing: -0.02em;
 }
 
 .interview-cal-day-column {

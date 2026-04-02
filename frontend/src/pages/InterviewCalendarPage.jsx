@@ -11,6 +11,10 @@ import {
   startOfWeekMondayInZone
 } from "../utils/interviewZonedTime";
 
+/** Fixed reference column (always JST) to the left of the selectable “view as” timezone gutter. */
+const CALENDAR_REFERENCE_TZ = "Asia/Tokyo";
+const CALENDAR_REFERENCE_TZ_LABEL = "JST";
+
 /** 24h × 30min = 48 rows (Google Calendar–style day grid). */
 const SLOTS_PER_DAY = 48;
 const SLOT_MINUTES = 30;
@@ -275,6 +279,25 @@ export default function InterviewCalendarPage() {
     return { top: clamped, label: now.toFormat("h:mm a") };
   }, [calendarTz, weekDays, nowTick]);
 
+  const referenceTzNowLabel = useMemo(() => {
+    const dt = DateTime.now().setZone(CALENDAR_REFERENCE_TZ);
+    return dt.isValid ? dt.toFormat("h:mm a") : "—";
+  }, [nowTick]);
+
+  const viewTzHeadAbbr = useMemo(() => {
+    if (!calendarTz) return "";
+    try {
+      const parts = new Intl.DateTimeFormat("en-US", {
+        timeZone: calendarTz,
+        timeZoneName: "short"
+      }).formatToParts(new Date());
+      const abbr = (parts.find((p) => p.type === "timeZoneName")?.value || "").trim();
+      return abbr || calendarTz.split("/").pop() || calendarTz;
+    } catch {
+      return calendarTz.split("/").pop() || calendarTz;
+    }
+  }, [calendarTz, nowTick]);
+
   const ownerPalette = useMemo(() => buildOwnerPaletteMaps(rows), [rows]);
 
   const byDay = useMemo(() => {
@@ -510,7 +533,21 @@ export default function InterviewCalendarPage() {
           <div className="interview-cal-gcal-scroll">
             <div className="interview-cal-gcal">
               <div className="interview-cal-gcal-header">
-                <div className="interview-cal-gcal-corner" aria-hidden />
+                <div className="interview-cal-gcal-timezone-heads">
+                  <div
+                    className="interview-cal-gcal-tz-head interview-cal-gcal-tz-head--reference"
+                    title={`${CALENDAR_REFERENCE_TZ_LABEL} now (${CALENDAR_REFERENCE_TZ})`}
+                  >
+                    <span className="interview-cal-gcal-tz-head-abbr">{CALENDAR_REFERENCE_TZ_LABEL}</span>
+                    <span className="interview-cal-gcal-tz-head-now">{referenceTzNowLabel}</span>
+                  </div>
+                  <div
+                    className="interview-cal-gcal-tz-head interview-cal-gcal-tz-head--view"
+                    title={`Grid times (${calendarTz})`}
+                  >
+                    <span className="interview-cal-gcal-tz-head-abbr">{viewTzHeadAbbr}</span>
+                  </div>
+                </div>
                 {weekDays.map((d) => (
                   <div key={d.toISODate()} className="interview-cal-gcal-head-cell">
                     <span className="interview-cal-gcal-dow">{d.toFormat("ccc")}</span>
@@ -520,7 +557,38 @@ export default function InterviewCalendarPage() {
               </div>
 
               <div className="interview-cal-gcal-body">
-                <div className="interview-cal-time-gutter" style={{ height: GRID_HEIGHT }}>
+                <div
+                  className="interview-cal-time-gutter interview-cal-time-gutter--reference"
+                  style={{ height: GRID_HEIGHT }}
+                  aria-label={`${CALENDAR_REFERENCE_TZ_LABEL} clock for each row (${CALENDAR_REFERENCE_TZ})`}
+                >
+                  {slotLines.map((slotIdx) => {
+                    const totalMin = slotIdx * SLOT_MINUTES;
+                    const showLabel = slotIdx % 2 === 0;
+                    const label = showLabel
+                      ? refDayForLabels
+                          .plus({ minutes: totalMin })
+                          .setZone(CALENDAR_REFERENCE_TZ)
+                          .toFormat("h:mm a")
+                      : "";
+                    return (
+                      <div
+                        key={slotIdx}
+                        className={`interview-cal-time-row${showLabel ? " interview-cal-time-row--hour" : ""}`}
+                        style={{ height: PX_PER_SLOT }}
+                      >
+                        {showLabel && (
+                          <span className="interview-cal-time-label interview-cal-time-label--compact">{label}</span>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                <div
+                  className="interview-cal-time-gutter interview-cal-time-gutter--view"
+                  style={{ height: GRID_HEIGHT }}
+                  aria-label={`Grid timezone (${calendarTz})`}
+                >
                   {slotLines.map((slotIdx) => {
                     const totalMin = slotIdx * SLOT_MINUTES;
                     const showLabel = slotIdx % 2 === 0;
@@ -718,7 +786,8 @@ export default function InterviewCalendarPage() {
             </div>
           </div>
           <p className="interview-cal-legend muted-text">
-            Times and day columns follow <strong>{calendarTz}</strong> (Pacific by default). Each horizontal line is 30
+            The left time column is <strong>{CALENDAR_REFERENCE_TZ_LABEL}</strong> ({CALENDAR_REFERENCE_TZ}); next column
+            matches <strong>{calendarTz}</strong> (Pacific by default). Each horizontal line is 30
             minutes. Overlapping interviews are grouped in one <strong>row container</strong> with a column per interview
             (side by side). Drag on empty space to schedule; each row is snapped to 30 minutes. The{" "}
             <strong className="interview-cal-now-legend">red line</strong> is the current time (when today falls in this
