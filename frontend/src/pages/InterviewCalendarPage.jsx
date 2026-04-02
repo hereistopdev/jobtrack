@@ -2,6 +2,8 @@ import { DateTime } from "luxon";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { fetchInterviewCalendar } from "../api";
+import TimeZoneCombobox from "../components/TimeZoneCombobox";
+import { getInterviewStageBadge } from "../utils/interviewStage";
 import { effectiveEndMs, rangesOverlap } from "../utils/interviewTime";
 import { buildOwnerPaletteMaps, DEFAULT_OWNER_COLOR, ownerKey } from "../utils/interviewOwnerColors";
 import {
@@ -37,6 +39,19 @@ function loggedByLabel(row) {
   const c = row.createdBy;
   if (c && typeof c === "object") return c.name || c.email || "—";
   return "—";
+}
+
+function InterviewCalStageBadge({ interviewType }) {
+  const badge = getInterviewStageBadge(interviewType);
+  if (!badge) return null;
+  return (
+    <span
+      className={`interview-cal-stage-badge interview-cal-stage-badge--s${badge.index}`}
+      title={`Interview type: ${badge.label}`}
+    >
+      {badge.label}
+    </span>
+  );
 }
 
 /**
@@ -230,6 +245,18 @@ export default function InterviewCalendarPage() {
     [timeZoneIds]
   );
 
+  /** Include current value when it is not in the platform list (legacy / manual URL). */
+  const timeZoneComboboxOptions = useMemo(() => {
+    const base = timeZoneSelectOptions;
+    if (calendarTz && !timeZoneIds.includes(calendarTz)) {
+      return [
+        { value: calendarTz, label: formatTimeZoneOptionLabel(calendarTz) || calendarTz },
+        ...base.filter((o) => o.value !== calendarTz)
+      ];
+    }
+    return base;
+  }, [calendarTz, timeZoneIds, timeZoneSelectOptions]);
+
   const weekMondayDt = useMemo(() => {
     const base = DateTime.fromISO(`${weekMondayIso}T00:00:00`, { zone: calendarTz });
     return base.isValid ? base : startOfWeekMondayInZone(new Date(), calendarTz);
@@ -297,6 +324,12 @@ export default function InterviewCalendarPage() {
       return calendarTz.split("/").pop() || calendarTz;
     }
   }, [calendarTz, nowTick]);
+
+  /** “Today” column uses the view timezone; refreshes with nowTick so midnight rollover is picked up. */
+  const todayIsoInViewTz = useMemo(
+    () => DateTime.now().setZone(calendarTz).toISODate(),
+    [calendarTz, nowTick]
+  );
 
   const ownerPalette = useMemo(() => buildOwnerPaletteMaps(rows), [rows]);
 
@@ -492,26 +525,13 @@ export default function InterviewCalendarPage() {
         </div>
         <div className="page-header-actions interview-cal-nav">
           <label className="interview-cal-tz-label">
-            <span className="muted-text">View as</span>
-            <select
-              className="interview-cal-tz-select"
-              value={
-                calendarTz && !timeZoneIds.includes(calendarTz)
-                  ? calendarTz
-                  : calendarTz || CALENDAR_DEFAULT_TZ
-              }
-              onChange={(e) => setCalendarTz(e.target.value)}
-              aria-label="Calendar timezone"
-            >
-              {calendarTz && !timeZoneIds.includes(calendarTz) ? (
-                <option value={calendarTz}>{formatTimeZoneOptionLabel(calendarTz) || calendarTz}</option>
-              ) : null}
-              {timeZoneSelectOptions.map(({ value, label }) => (
-                <option key={value} value={value}>
-                  {label}
-                </option>
-              ))}
-            </select>
+            <span className="muted-text">View as (search country, capital, EST, UTC+4…)</span>
+            <TimeZoneCombobox
+              value={calendarTz || CALENDAR_DEFAULT_TZ}
+              onChange={setCalendarTz}
+              options={timeZoneComboboxOptions}
+              ariaLabel="Calendar timezone"
+            />
           </label>
           <button type="button" className="small muted" onClick={prevWeek}>
             ← Prev week
@@ -548,12 +568,19 @@ export default function InterviewCalendarPage() {
                     <span className="interview-cal-gcal-tz-head-abbr">{viewTzHeadAbbr}</span>
                   </div>
                 </div>
-                {weekDays.map((d) => (
-                  <div key={d.toISODate()} className="interview-cal-gcal-head-cell">
-                    <span className="interview-cal-gcal-dow">{d.toFormat("ccc")}</span>
-                    <span className="interview-cal-gcal-dom">{d.day}</span>
-                  </div>
-                ))}
+                {weekDays.map((d) => {
+                  const dayIso = d.toISODate();
+                  const isTodayCol = dayIso === todayIsoInViewTz;
+                  return (
+                    <div
+                      key={dayIso}
+                      className={`interview-cal-gcal-head-cell${isTodayCol ? " interview-cal-gcal-head-cell--today" : ""}`}
+                    >
+                      <span className="interview-cal-gcal-dow">{d.toFormat("ccc")}</span>
+                      <span className="interview-cal-gcal-dom">{d.day}</span>
+                    </div>
+                  );
+                })}
               </div>
 
               <div className="interview-cal-gcal-body">
@@ -622,8 +649,13 @@ export default function InterviewCalendarPage() {
                         })()
                       : null;
 
+                  const isTodayCol = key === todayIsoInViewTz;
                   return (
-                    <div key={key} className="interview-cal-day-column">
+                    <div
+                      key={key}
+                      className={`interview-cal-day-column${isTodayCol ? " interview-cal-day-column--today" : ""}`}
+                      aria-current={isTodayCol ? "date" : undefined}
+                    >
                       <div
                         className="interview-cal-day-grid"
                         style={{ height: GRID_HEIGHT }}
@@ -655,12 +687,13 @@ export default function InterviewCalendarPage() {
                               const oid = stableInterviewId(ev);
                               const bad = overlapIdsByDay.get(key)?.has(oid) ?? false;
                               const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
+                              const hasStage = Boolean(getInterviewStageBadge(ev.interviewType));
                               return (
                                 <div
                                   key={`${key}-${item.key}`}
                                   role="button"
                                   tabIndex={0}
-                                  className={`interview-cal-block${bad ? " interview-cal-block--overlap" : ""}`}
+                                  className={`interview-cal-block${bad ? " interview-cal-block--overlap" : ""}${hasStage ? " interview-cal-block--has-stage" : ""}`}
                                   style={{
                                     position: "absolute",
                                     top: st.top,
@@ -681,6 +714,7 @@ export default function InterviewCalendarPage() {
                                     }
                                   }}
                                 >
+                                  <InterviewCalStageBadge interviewType={ev.interviewType} />
                                   <span className="interview-cal-block-title" style={{ color: col.title }}>
                                     {ev.subjectName}
                                   </span>
@@ -718,6 +752,7 @@ export default function InterviewCalendarPage() {
                                   const oid = stableInterviewId(ev);
                                   const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
                                   const offsetTop = st.top - item.wrapperTop;
+                                  const hasStage = Boolean(getInterviewStageBadge(ev.interviewType));
                                   return (
                                     <div
                                       key={`${oid}-lane${laneIdx}`}
@@ -733,7 +768,7 @@ export default function InterviewCalendarPage() {
                                       <div
                                         role="button"
                                         tabIndex={0}
-                                        className="interview-cal-block interview-cal-block--overlap interview-cal-block--in-overlap-group"
+                                        className={`interview-cal-block interview-cal-block--overlap interview-cal-block--in-overlap-group${hasStage ? " interview-cal-block--has-stage" : ""}`}
                                         data-sub-slot={laneIdx % 2}
                                         style={{
                                           position: "absolute",
@@ -756,6 +791,7 @@ export default function InterviewCalendarPage() {
                                           }
                                         }}
                                       >
+                                        <InterviewCalStageBadge interviewType={ev.interviewType} />
                                         <span className="interview-cal-block-title" style={{ color: col.title }}>
                                           {ev.subjectName}
                                         </span>
@@ -792,7 +828,9 @@ export default function InterviewCalendarPage() {
             (side by side). Drag on empty space to schedule; each row is snapped to 30 minutes. The{" "}
             <strong className="interview-cal-now-legend">red line</strong> is the current time (when today falls in this
             week); it updates every 30 seconds. Slot colors match the <strong>interview subject</strong> (teammate);
-            linked users share one color.
+            linked users share one color. A <strong>corner badge</strong> shows the interview type when{" "}
+            <strong>Interview type</strong> on the Interviews form matches Phone, Intro, Tech&nbsp;1, Tech&nbsp;2, Final
+            (or 0–4), or common phrases like “phone screen” or “technical 2”.
           </p>
           {weekDays.some((d) => (overlapClustersByDay.get(d.toISODate()) || []).length > 0) && (
             <details className="interview-cal-overlap-debug card">
