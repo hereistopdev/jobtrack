@@ -17,20 +17,49 @@ const SLOT_MINUTES = 30;
 const PX_PER_SLOT = 32;
 const GRID_HEIGHT = SLOTS_PER_DAY * PX_PER_SLOT;
 
+/** Normalize API `_id` (string, ObjectId, or { $oid }) so layout maps and overlap sets match. */
+function stableInterviewId(ev) {
+  const raw = ev?._id ?? ev?.id;
+  if (raw == null || raw === "") return "";
+  if (typeof raw === "string") return raw;
+  if (typeof raw === "object") {
+    if (typeof raw.toHexString === "function") return raw.toHexString();
+    if ("$oid" in raw && raw.$oid != null) return String(raw.$oid);
+  }
+  return String(raw);
+}
+
 function loggedByLabel(row) {
   const c = row.createdBy;
   if (c && typeof c === "object") return c.name || c.email || "—";
   return "—";
 }
 
-/** Clip event to a calendar day in `zone`; minutes from local midnight [0, 1440+]. */
-function clipEventToDay(dayStart, ev, zone) {
+/**
+ * Clip event to [dayStart, dayEnd) in `zone`; returns wall-time bounds in epoch ms.
+ * Single source of truth for “is this row on this calendar day?” and overlap.
+ */
+function clipIntervalWallMs(dayStart, ev, zone) {
   const dayEnd = dayStart.plus({ days: 1 });
   const evS = DateTime.fromJSDate(new Date(ev.scheduledAt), { zone: "utc" }).setZone(zone);
   const evE = DateTime.fromJSDate(new Date(effectiveEndMs(ev)), { zone: "utc" }).setZone(zone);
   const clipStart = evS > dayStart ? evS : dayStart;
   const clipEnd = evE < dayEnd ? evE : dayEnd;
   if (clipEnd <= clipStart) return null;
+  return { startMs: clipStart.toMillis(), endMs: clipEnd.toMillis() };
+}
+
+function intervalsOverlapMs(a, b) {
+  if (!a || !b) return false;
+  return a.startMs < b.endMs && b.startMs < a.endMs;
+}
+
+/** Minutes from local midnight for layout (derived from clip ms so overlap and grid agree). */
+function clipEventToDay(dayStart, ev, zone) {
+  const iv = clipIntervalWallMs(dayStart, ev, zone);
+  if (!iv) return null;
+  const clipStart = DateTime.fromMillis(iv.startMs, { zone });
+  const clipEnd = DateTime.fromMillis(iv.endMs, { zone });
   const startM = clipStart.diff(dayStart, "minutes").minutes;
   const endM = clipEnd.diff(dayStart, "minutes").minutes;
   return { startM, endM };
@@ -44,6 +73,116 @@ function eventBlockStyle(clip) {
   return { top, height };
 }
 
+function sortClusterEvents(dayStart, zone, cluster) {
+  return [...cluster].sort((a, b) => {
+    const ia = clipIntervalWallMs(dayStart, a, zone);
+    const ib = clipIntervalWallMs(dayStart, b, zone);
+    if (!ia || !ib) return stableInterviewId(a).localeCompare(stableInterviewId(b));
+    if (ia.startMs !== ib.startMs) return ia.startMs - ib.startMs;
+    if (ia.endMs !== ib.endMs) return ia.endMs - ib.endMs;
+    return stableInterviewId(a).localeCompare(stableInterviewId(b));
+  });
+}
+
+function clusterWrapperMetrics(dayStart, zone, sortedCluster) {
+  let minTop = Infinity;
+  let maxBottom = 0;
+  for (const ev of sortedCluster) {
+    const clip = clipEventToDay(dayStart, ev, zone);
+    if (!clip) continue;
+    const st = eventBlockStyle(clip);
+    minTop = Math.min(minTop, st.top);
+    maxBottom = Math.max(maxBottom, st.top + st.height);
+  }
+  if (!Number.isFinite(minTop)) minTop = 0;
+  return { wrapperTop: minTop, wrapperHeight: Math.max(maxBottom - minTop, 22) };
+}
+
+/**
+ * Flat list of render items: standalone interviews, or one wrapper per overlap cluster.
+ */
+function buildDayRenderPlan(list, dayStart, zone) {
+  const clusterIdxGroups = buildOverlapClustersForDay(list, dayStart, zone);
+  const inClusterIdx = new Set();
+  for (const idxs of clusterIdxGroups) {
+    for (const i of idxs) inClusterIdx.add(i);
+  }
+  const items = [];
+  for (const idxs of clusterIdxGroups) {
+    const cluster = idxs.map((i) => list[i]);
+    const sorted = sortClusterEvents(dayStart, zone, cluster);
+    const { wrapperTop, wrapperHeight } = clusterWrapperMetrics(dayStart, zone, sorted);
+    items.push({
+      kind: "cluster",
+      cluster: sorted,
+      wrapperTop,
+      wrapperHeight,
+      key: idxs.join("|")
+    });
+  }
+  for (let i = 0; i < list.length; i++) {
+    if (inClusterIdx.has(i)) continue;
+    const ev = list[i];
+    const clip = clipEventToDay(dayStart, ev, zone);
+    if (!clip) continue;
+    items.push({ kind: "single", ev, key: `${stableInterviewId(ev)}-idx${i}` });
+  }
+  items.sort((a, b) => {
+    const topA =
+      a.kind === "cluster"
+        ? a.wrapperTop
+        : eventBlockStyle(clipEventToDay(dayStart, a.ev, zone)).top;
+    const topB =
+      b.kind === "cluster"
+        ? b.wrapperTop
+        : eventBlockStyle(clipEventToDay(dayStart, b.ev, zone)).top;
+    return topA - topB;
+  });
+  return items;
+}
+
+/**
+ * Transitive overlap groups: returns **list index** groups (not ids), so duplicate rows stay distinct.
+ * Edge if clipped intervals overlap, or full `rangesOverlap` when both have clips (catches edge mismatches).
+ */
+function buildOverlapClustersForDay(list, dayStart, zone) {
+  const n = list.length;
+  const ivs = list.map((ev) => clipIntervalWallMs(dayStart, ev, zone));
+  const adj = Array.from({ length: n }, () => []);
+  for (let i = 0; i < n; i++) {
+    if (!ivs[i]) continue;
+    for (let j = i + 1; j < n; j++) {
+      if (!ivs[j]) continue;
+      const clipOverlap = intervalsOverlapMs(ivs[i], ivs[j]);
+      const rangeOverlap = rangesOverlap(list[i], list[j]);
+      if (clipOverlap || rangeOverlap) {
+        adj[i].push(j);
+        adj[j].push(i);
+      }
+    }
+  }
+  const seen = new Array(n).fill(false);
+  const clusters = [];
+  for (let i = 0; i < n; i++) {
+    if (seen[i] || !ivs[i]) continue;
+    const compIdx = [];
+    const stack = [i];
+    seen[i] = true;
+    while (stack.length) {
+      const u = stack.pop();
+      compIdx.push(u);
+      for (const v of adj[u]) {
+        if (!seen[v]) {
+          seen[v] = true;
+          stack.push(v);
+        }
+      }
+    }
+    if (compIdx.length > 1) clusters.push(compIdx);
+  }
+  return clusters;
+}
+
 /** Pixel Y within grid → slot index [0, SLOTS_PER_DAY - 1]. */
 function yToSlot(clientY, gridEl) {
   const rect = gridEl.getBoundingClientRect();
@@ -52,12 +191,9 @@ function yToSlot(clientY, gridEl) {
   return Math.max(0, Math.min(SLOTS_PER_DAY - 1, raw));
 }
 
-function eventOverlapsDay(ev, dayStart) {
-  const ds = dayStart.toUTC().toMillis();
-  const de = dayStart.plus({ days: 1 }).toUTC().toMillis();
-  const s = new Date(ev.scheduledAt).getTime();
-  const e = effectiveEndMs(ev);
-  return s < de && e > ds;
+/** Row appears in this calendar column iff its clipped wall-time interval in `zone` is non-empty. */
+function eventOverlapsDay(ev, dayStart, zone) {
+  return clipIntervalWallMs(dayStart, ev, zone) != null;
 }
 
 function formatRangeInZone(ev, zone) {
@@ -150,29 +286,66 @@ export default function InterviewCalendarPage() {
     for (const ev of rows) {
       for (const d of weekDays) {
         const dayStart = d;
-        if (eventOverlapsDay(ev, dayStart)) {
+        if (eventOverlapsDay(ev, dayStart, calendarTz)) {
           map.get(dayStart.toISODate()).push(ev);
         }
       }
     }
     return map;
-  }, [rows, weekDays]);
+  }, [rows, weekDays, calendarTz]);
 
-  const overlapIds = useMemo(() => {
-    const ids = new Set();
+  /**
+   * Per calendar column: ids that overlap someone else **on that same day** (same rules as clusters).
+   * A week-wide Set would mark multi-day rows with the badge on every column where they appear
+   * if they overlapped anyone on any other day — while clustering stays per-day, so layout and badge diverged.
+   */
+  const overlapIdsByDay = useMemo(() => {
+    const map = new Map();
     for (const d of weekDays) {
-      const list = byDay.get(d.toISODate()) || [];
+      const key = d.toISODate();
+      const ids = new Set();
+      const list = byDay.get(key) || [];
       for (let i = 0; i < list.length; i++) {
+        const iv1 = clipIntervalWallMs(d, list[i], calendarTz);
+        if (!iv1) continue;
         for (let j = i + 1; j < list.length; j++) {
-          if (rangesOverlap(list[i], list[j])) {
-            ids.add(String(list[i]._id));
-            ids.add(String(list[j]._id));
+          const iv2 = clipIntervalWallMs(d, list[j], calendarTz);
+          if (!iv2) continue;
+          if (intervalsOverlapMs(iv1, iv2) || rangesOverlap(list[i], list[j])) {
+            ids.add(stableInterviewId(list[i]));
+            ids.add(stableInterviewId(list[j]));
           }
         }
       }
+      map.set(key, ids);
     }
-    return ids;
-  }, [byDay, weekDays]);
+    return map;
+  }, [byDay, weekDays, calendarTz]);
+
+  /** Per ISO date: array of overlap clusters (each cluster is 2+ interviews that overlap transitively). */
+  const overlapClustersByDay = useMemo(() => {
+    const map = new Map();
+    for (const d of weekDays) {
+      const key = d.toISODate();
+      const list = byDay.get(key) || [];
+      map.set(
+        key,
+        buildOverlapClustersForDay(list, d, calendarTz).map((idxs) => idxs.map((i) => list[i]))
+      );
+    }
+    return map;
+  }, [byDay, weekDays, calendarTz]);
+
+  /** ISO date → ordered list of { single interview } or { overlap cluster with wrapper metrics }. */
+  const dayRenderPlanByKey = useMemo(() => {
+    const out = new Map();
+    for (const d of weekDays) {
+      const key = d.toISODate();
+      const list = byDay.get(key) || [];
+      out.set(key, buildDayRenderPlan(list, d, calendarTz));
+    }
+    return out;
+  }, [byDay, weekDays, calendarTz]);
 
   const prevWeek = () => {
     setWeekMondayIso((prev) => {
@@ -405,40 +578,126 @@ export default function InterviewCalendarPage() {
                           />
                         )}
                         <div className="interview-cal-events-layer">
-                          {list.map((ev) => {
-                            const clip = clipEventToDay(dayStart, ev, calendarTz);
-                            if (!clip) return null;
-                            const st = eventBlockStyle(clip);
-                            const oid = String(ev._id);
-                            const bad = overlapIds.has(oid);
-                            const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
+                          {(dayRenderPlanByKey.get(key) || []).map((item) => {
+                            if (item.kind === "single") {
+                              const ev = item.ev;
+                              const clip = clipEventToDay(dayStart, ev, calendarTz);
+                              if (!clip) return null;
+                              const st = eventBlockStyle(clip);
+                              const oid = stableInterviewId(ev);
+                              const bad = overlapIdsByDay.get(key)?.has(oid) ?? false;
+                              const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
+                              return (
+                                <div
+                                  key={`${key}-${item.key}`}
+                                  role="button"
+                                  tabIndex={0}
+                                  className={`interview-cal-block${bad ? " interview-cal-block--overlap" : ""}`}
+                                  style={{
+                                    position: "absolute",
+                                    top: st.top,
+                                    height: st.height,
+                                    left: 4,
+                                    right: 4,
+                                    width: "auto",
+                                    zIndex: 1,
+                                    borderColor: col.border,
+                                    background: `linear-gradient(135deg, ${col.bg1} 0%, ${col.bg2} 100%)`
+                                  }}
+                                  title={`${ev.subjectName} — ${ev.company}`}
+                                  onClick={(e) => openDetails(ev, e)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" || e.key === " ") {
+                                      e.preventDefault();
+                                      openDetails(ev, e);
+                                    }
+                                  }}
+                                >
+                                  <span className="interview-cal-block-title" style={{ color: col.title }}>
+                                    {ev.subjectName}
+                                  </span>
+                                  <span className="interview-cal-block-sub">{ev.company}</span>
+                                  <span className="interview-cal-block-by">{loggedByLabel(ev)}</span>
+                                  {bad && <span className="interview-cal-block-warn">Overlap</span>}
+                                </div>
+                              );
+                            }
                             return (
                               <div
-                                key={`${oid}-${key}`}
-                                role="button"
-                                tabIndex={0}
-                                className={`interview-cal-block${bad ? " interview-cal-block--overlap" : ""}`}
+                                key={`${key}-cluster-${item.key}`}
+                                className="interview-cal-overlap-group"
+                                data-overlap-group="true"
+                                role="group"
                                 style={{
-                                  top: st.top,
-                                  height: st.height,
-                                  borderColor: col.border,
-                                  background: `linear-gradient(135deg, ${col.bg1} 0%, ${col.bg2} 100%)`
+                                  position: "absolute",
+                                  left: 4,
+                                  right: 4,
+                                  top: item.wrapperTop,
+                                  height: item.wrapperHeight,
+                                  display: "flex",
+                                  flexDirection: "row",
+                                  gap: 2,
+                                  zIndex: 6,
+                                  pointerEvents: "none",
+                                  boxSizing: "border-box"
                                 }}
-                                title={`${ev.subjectName} — ${ev.company}`}
-                                onClick={(e) => openDetails(ev, e)}
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" || e.key === " ") {
-                                    e.preventDefault();
-                                    openDetails(ev, e);
-                                  }
-                                }}
+                                aria-label={`Overlapping interviews (${item.cluster.length})`}
                               >
-                                <span className="interview-cal-block-title" style={{ color: col.title }}>
-                                  {ev.subjectName}
-                                </span>
-                                <span className="interview-cal-block-sub">{ev.company}</span>
-                                <span className="interview-cal-block-by">{loggedByLabel(ev)}</span>
-                                {bad && <span className="interview-cal-block-warn">Overlap</span>}
+                                {item.cluster.map((ev, laneIdx) => {
+                                  const clip = clipEventToDay(dayStart, ev, calendarTz);
+                                  if (!clip) return null;
+                                  const st = eventBlockStyle(clip);
+                                  const oid = stableInterviewId(ev);
+                                  const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
+                                  const offsetTop = st.top - item.wrapperTop;
+                                  return (
+                                    <div
+                                      key={`${oid}-lane${laneIdx}`}
+                                      className="interview-cal-overlap-group-lane"
+                                      style={{
+                                        flex: 1,
+                                        minWidth: 0,
+                                        position: "relative",
+                                        height: item.wrapperHeight,
+                                        pointerEvents: "none"
+                                      }}
+                                    >
+                                      <div
+                                        role="button"
+                                        tabIndex={0}
+                                        className="interview-cal-block interview-cal-block--overlap interview-cal-block--in-overlap-group"
+                                        data-sub-slot={laneIdx % 2}
+                                        style={{
+                                          position: "absolute",
+                                          left: 0,
+                                          right: 0,
+                                          top: offsetTop,
+                                          height: st.height,
+                                          zIndex: 5 + (laneIdx % 2),
+                                          borderColor: col.border,
+                                          background: `linear-gradient(135deg, ${col.bg1} 0%, ${col.bg2} 100%)`,
+                                          pointerEvents: "auto",
+                                          boxSizing: "border-box"
+                                        }}
+                                        title={`${ev.subjectName} — ${ev.company}`}
+                                        onClick={(e) => openDetails(ev, e)}
+                                        onKeyDown={(e) => {
+                                          if (e.key === "Enter" || e.key === " ") {
+                                            e.preventDefault();
+                                            openDetails(ev, e);
+                                          }
+                                        }}
+                                      >
+                                        <span className="interview-cal-block-title" style={{ color: col.title }}>
+                                          {ev.subjectName}
+                                        </span>
+                                        <span className="interview-cal-block-sub">{ev.company}</span>
+                                        <span className="interview-cal-block-by">{loggedByLabel(ev)}</span>
+                                        <span className="interview-cal-block-warn">Overlap</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
                               </div>
                             );
                           })}
@@ -460,11 +719,57 @@ export default function InterviewCalendarPage() {
           </div>
           <p className="interview-cal-legend muted-text">
             Times and day columns follow <strong>{calendarTz}</strong> (Pacific by default). Each horizontal line is 30
-            minutes. Drag on empty space to schedule; each row is snapped to 30 minutes. The{" "}
+            minutes. Overlapping interviews are grouped in one <strong>row container</strong> with a column per interview
+            (side by side). Drag on empty space to schedule; each row is snapped to 30 minutes. The{" "}
             <strong className="interview-cal-now-legend">red line</strong> is the current time (when today falls in this
             week); it updates every 30 seconds. Slot colors match the <strong>interview subject</strong> (teammate);
             linked users share one color.
           </p>
+          {weekDays.some((d) => (overlapClustersByDay.get(d.toISODate()) || []).length > 0) && (
+            <details className="interview-cal-overlap-debug card">
+              <summary className="interview-cal-overlap-debug-summary">
+                Overlapping schedule groups (this week) — same logic as the grid
+              </summary>
+              <div className="interview-cal-overlap-debug-body muted-text">
+                <p className="interview-cal-overlap-debug-intro">
+                  Each <strong>group</strong> is a set of interviews on the same calendar day whose time ranges overlap
+                  when clipped to that day in <strong>{calendarTz}</strong> (transitive: if A overlaps B and B overlaps C,
+                  all three are one group).
+                </p>
+                <ul className="interview-cal-overlap-debug-days">
+                  {weekDays.map((d) => {
+                    const key = d.toISODate();
+                    const clusters = overlapClustersByDay.get(key) || [];
+                    if (clusters.length === 0) return null;
+                    return (
+                      <li key={key}>
+                        <strong>{d.toFormat("ccc, MMM d")}</strong> ({key})
+                        <ol className="interview-cal-overlap-debug-groups">
+                          {clusters.map((group, gi) => (
+                            <li key={gi}>
+                              Group {gi + 1} ({group.length} interviews)
+                              <ul>
+                                {group.map((ev) => (
+                                  <li key={stableInterviewId(ev)}>
+                                    <span className="interview-cal-overlap-debug-title">{ev.subjectName}</span>
+                                    <span className="interview-cal-overlap-debug-meta">
+                                      {" "}
+                                      — {formatRangeInZone(ev, calendarTz)} —{" "}
+                                      <code className="interview-cal-overlap-debug-id">{stableInterviewId(ev)}</code>
+                                    </span>
+                                  </li>
+                                ))}
+                              </ul>
+                            </li>
+                          ))}
+                        </ol>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </div>
+            </details>
+          )}
           {ownerPalette.orderedKeys.length > 0 && (
             <div className="interview-cal-owner-legend" aria-label="Subject colors for this week">
               <span className="interview-cal-owner-legend-heading muted-text">Subject colors</span>

@@ -2459,14 +2459,17 @@ th {
   left: 0;
   right: 0;
   top: 0;
+  bottom: 0;
   z-index: 1;
   pointer-events: none;
 }
 
 .interview-cal-block {
   position: absolute;
-  left: 0.125rem;
-  right: 0.125rem;
+  /* Full width in column; overlapped sets use .interview-cal-overlap-group > .interview-cal-overlap-group-lane. */
+  left: 4px;
+  right: 4px;
+  width: auto;
   box-sizing: border-box;
   padding: 0.2rem 0.35rem;
   border-radius: 4px;
@@ -2479,16 +2482,58 @@ th {
   pointer-events: auto;
   cursor: pointer;
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  z-index: 1;
+}
+
+.interview-cal-overlap-group {
+  position: absolute;
+  left: 4px;
+  right: 4px;
+  display: flex;
+  flex-direction: row;
+  gap: 2px;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+.interview-cal-overlap-group-lane {
+  flex: 1 1 0;
+  min-width: 0;
+  position: relative;
+  pointer-events: none;
+}
+
+.interview-cal-block--in-overlap-group {
+  width: 100%;
+  left: 0 !important;
+  right: 0 !important;
 }
 
 .interview-cal-block:focus-visible {
   outline: 2px solid #2563eb;
   outline-offset: 1px;
-  z-index: 2;
+  z-index: 50;
 }
 
 .interview-cal-block--overlap {
-  box-shadow: inset 0 0 0 2px #ea580c, 0 1px 2px rgba(0, 0, 0, 0.06);
+  padding: 0.28rem 0.42rem 0.28rem 0.38rem;
+  /* Google-style stacked cards: front layers read as floating above */
+  box-shadow: inset 0 0 0 1px rgba(234, 88, 12, 0.35), 2px 2px 0 rgba(15, 23, 42, 0.06),
+    0 3px 10px rgba(15, 23, 42, 0.1);
+  border-left: 3px solid rgba(234, 88, 12, 0.45);
+  opacity: 0.62;
+}
+
+.interview-cal-block--overlap.interview-cal-block--in-overlap-group[data-sub-slot="0"] {
+  opacity: 0.55;
+}
+
+.interview-cal-block--overlap.interview-cal-block--in-overlap-group[data-sub-slot="1"] {
+  opacity: 0.68;
+}
+
+.interview-cal-block--overlap:focus-visible {
+  opacity: 1;
 }
 
 .interview-cal-block-title {
@@ -2511,12 +2556,76 @@ th {
 }
 
 .interview-cal-block-warn {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   margin-top: 0.15rem;
+  padding: 0.03rem 0.2rem;
+  border-radius: 999px;
+  background: rgba(194, 65, 12, 0.12);
   font-size: 0.55rem;
   font-weight: 700;
   color: #c2410c;
   text-transform: uppercase;
+}
+
+.interview-cal-overlap-debug {
+  margin: 12px 16px 0;
+  padding: 12px 16px;
+  font-size: 0.85rem;
+}
+
+.interview-cal-overlap-debug-summary {
+  cursor: pointer;
+  font-weight: 600;
+  color: #374151;
+}
+
+.interview-cal-overlap-debug-body {
+  margin-top: 10px;
+}
+
+.interview-cal-overlap-debug-intro {
+  margin: 0 0 12px;
+  line-height: 1.45;
+}
+
+.interview-cal-overlap-debug-days {
+  margin: 0;
+  padding-left: 1.1rem;
+}
+
+.interview-cal-overlap-debug-days > li {
+  margin-bottom: 14px;
+}
+
+.interview-cal-overlap-debug-groups {
+  margin: 6px 0 0;
+  padding-left: 1.1rem;
+}
+
+.interview-cal-overlap-debug-groups > li {
+  margin-bottom: 8px;
+}
+
+.interview-cal-overlap-debug-groups ul {
+  margin: 4px 0 0;
+  padding-left: 1.1rem;
+}
+
+.interview-cal-overlap-debug-title {
+  font-weight: 600;
+  color: #1f2937;
+}
+
+.interview-cal-overlap-debug-meta {
+  font-size: 0.8rem;
+}
+
+.interview-cal-overlap-debug-id {
+  font-size: 0.75rem;
+  background: #f3f4f6;
+  padding: 0.05rem 0.25rem;
+  border-radius: 3px;
 }
 
 .interview-cal-legend {
