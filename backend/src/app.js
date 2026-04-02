@@ -12,6 +12,7 @@ import calendarSourcesRouter from "./routes/calendarSources.js";
 import teamAccountsRouter from "./routes/teamAccounts.js";
 import totpEntriesRouter from "./routes/totpEntries.js";
 import userDirectoryRouter from "./routes/userDirectory.js";
+import profileDocumentsRouter from "./routes/profileDocuments.js";
 
 const app = express();
 
@@ -32,6 +33,7 @@ app.get("/api/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRouter);
+app.use("/api/auth/profile-files", profileDocumentsRouter);
 app.use("/api/users", userDirectoryRouter);
 app.use("/api/job-links", jobLinksRouter);
 app.use("/api/admin/users", adminUsersRouter);

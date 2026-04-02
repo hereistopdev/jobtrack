@@ -2,12 +2,12 @@ import express from "express";
 import mongoose from "mongoose";
 import { CalendarSource, CALENDAR_SOURCE_TYPES } from "../models/CalendarSource.js";
 import { InterviewRecord } from "../models/InterviewRecord.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 import { syncCalendarSourceToInterviews } from "../utils/calendarIcsSync.js";
 import { assertSafeIcsUrl } from "../utils/calendarIcsFetch.js";
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, requireApprovedUser);
 
 const MAX_PER_USER = 30;
 

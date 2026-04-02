@@ -5,7 +5,7 @@ import crypto from "crypto";
 import { InterviewRecord } from "../models/InterviewRecord.js";
 import { User } from "../models/User.js";
 import { SystemSetting, SYSTEM_SETTING_ID } from "../models/SystemSetting.js";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requireAdmin, requireApprovedUser } from "../middleware/auth.js";
 import { canModifyInterviewRecord } from "../utils/interviewPermissions.js";
 import { buildInterviewSummary } from "../utils/interviewSummary.js";
 import { importInterviewExcelBuffer } from "../utils/interviewExcelImport.js";
@@ -14,6 +14,8 @@ import {
   findOverlappingInterviews,
   resolveScheduledEnd
 } from "../utils/interviewTimeRange.js";
+import { enrichCalendarInterviewsWithProfileColor } from "../utils/interviewCalendarColors.js";
+import { migrateJobProfilesIfNeeded } from "../utils/jobProfiles.js";
 
 function serializeConflict(o) {
   return {
@@ -28,6 +30,53 @@ function serializeConflict(o) {
 }
 
 const router = express.Router();
+
+/**
+ * Resolve stored profile label + jobProfileId for a linked subject user.
+ * @returns {{ jobProfileId: import("mongoose").Types.ObjectId | null, profile: string } | null} null = no change to apply from this helper
+ */
+function matchProfileForSubject(subjectDoc, { jobProfileIdRaw, profileStr, fallbackProfile }) {
+  const profiles = subjectDoc.jobProfiles || [];
+
+  if (jobProfileIdRaw !== undefined) {
+    if (jobProfileIdRaw === null || jobProfileIdRaw === "") {
+      const prof =
+        typeof profileStr === "string"
+          ? String(profileStr).trim()
+          : typeof fallbackProfile === "string"
+            ? String(fallbackProfile).trim()
+            : "";
+      if (prof) {
+        const p = profiles.find((x) => x.label.toLowerCase() === prof.toLowerCase());
+        if (p) return { jobProfileId: p._id, profile: p.label };
+      }
+      return { jobProfileId: null, profile: prof };
+    }
+    const pid = String(jobProfileIdRaw).trim();
+    if (!mongoose.Types.ObjectId.isValid(pid)) {
+      const err = new Error("Invalid jobProfileId");
+      err.status = 400;
+      throw err;
+    }
+    const p = profiles.find((x) => x._id.toString() === pid);
+    if (!p) {
+      const err = new Error("jobProfileId does not match this team member's job profiles");
+      err.status = 400;
+      throw err;
+    }
+    return { jobProfileId: p._id, profile: p.label };
+  }
+
+  if (profileStr !== undefined) {
+    const prof = String(profileStr).trim();
+    if (!prof) return { jobProfileId: null, profile: "" };
+    const p = profiles.find((x) => x.label.toLowerCase() === prof.toLowerCase());
+    if (p) return { jobProfileId: p._id, profile: p.label };
+    return { jobProfileId: null, profile: prof };
+  }
+
+  return null;
+}
 
 function ensureToken(v) {
   return v && typeof v === "string" && v.trim() ? v.trim() : crypto.randomBytes(24).toString("hex");
@@ -212,7 +261,7 @@ router.get("/feed/:token.ics", async (req, res) => {
   }
 });
 
-router.use(requireAuth);
+router.use(requireAuth, requireApprovedUser);
 
 router.get("/feeds", async (req, res) => {
   try {
@@ -302,10 +351,11 @@ router.get("/calendar", async (req, res) => {
       return res.status(400).json({ message: "Range too large (max 120 days)" });
     }
     const rows = await findInterviewsInCalendarWindow(from, to);
+    const interviews = await enrichCalendarInterviewsWithProfileColor(rows);
     res.json({
       from: from.toISOString(),
       to: to.toISOString(),
-      interviews: rows
+      interviews
     });
   } catch (error) {
     res.status(500).json({ message: "Failed to load calendar", error: error.message });
@@ -409,6 +459,35 @@ router.post("/", async (req, res) => {
       subjectUserId = sid;
     }
 
+    let profile = typeof b.profile === "string" ? b.profile.trim() : "";
+    let jobProfileId = null;
+    if (subjectUserId) {
+      const subject = await User.findById(subjectUserId).select("jobProfiles interviewProfiles");
+      if (!subject) {
+        return res.status(400).json({ message: "subjectUserId user not found" });
+      }
+      await migrateJobProfilesIfNeeded(subject);
+      try {
+        const hasExplicitJobProfileId =
+          b.jobProfileId !== undefined &&
+          b.jobProfileId !== null &&
+          String(b.jobProfileId).trim() !== "";
+        const resolved = matchProfileForSubject(subject, {
+          jobProfileIdRaw: hasExplicitJobProfileId ? b.jobProfileId : undefined,
+          profileStr: hasExplicitJobProfileId ? undefined : profile,
+          fallbackProfile: profile
+        });
+        if (resolved) {
+          jobProfileId = resolved.jobProfileId;
+          profile = resolved.profile;
+        }
+      } catch (e) {
+        return res.status(e.status || 400).json({ message: e.message });
+      }
+    } else if (b.jobProfileId != null && String(b.jobProfileId).trim() !== "") {
+      return res.status(400).json({ message: "jobProfileId requires subjectUserId" });
+    }
+
     const timezone =
       typeof b.timezone === "string" ? b.timezone.trim().slice(0, 120) : "";
 
@@ -417,7 +496,8 @@ router.post("/", async (req, res) => {
       subjectUserId: subjectUserId || undefined,
       company,
       roleTitle,
-      profile: typeof b.profile === "string" ? b.profile.trim() : "",
+      profile,
+      jobProfileId: jobProfileId || undefined,
       stack: typeof b.stack === "string" ? b.stack.trim() : "",
       scheduledAt,
       scheduledEndAt: scheduledEnd,
@@ -455,7 +535,6 @@ router.patch("/:id", async (req, res) => {
     if (b.roleTitle !== undefined || b.title !== undefined) {
       updates.roleTitle = String(b.roleTitle ?? b.title ?? "").trim();
     }
-    if (b.profile !== undefined) updates.profile = String(b.profile).trim();
     if (b.stack !== undefined) updates.stack = String(b.stack).trim();
     if (b.scheduledAt !== undefined) {
       const d = new Date(b.scheduledAt);
@@ -513,6 +592,66 @@ router.patch("/:id", async (req, res) => {
           return res.status(400).json({ message: "Invalid subjectUserId" });
         }
         updates.subjectUserId = sid;
+      }
+    }
+
+    const effectiveSubjectId =
+      b.subjectUserId !== undefined
+        ? b.subjectUserId === null || b.subjectUserId === ""
+          ? null
+          : String(b.subjectUserId).trim()
+        : doc.subjectUserId
+          ? doc.subjectUserId.toString()
+          : null;
+
+    const subjectChanged =
+      Boolean(b.subjectUserId !== undefined) &&
+      String(effectiveSubjectId || "") !== String(doc.subjectUserId || "");
+
+    const touchesProfile =
+      b.jobProfileId !== undefined || b.profile !== undefined || subjectChanged;
+
+    if (touchesProfile) {
+      if (!effectiveSubjectId) {
+        updates.jobProfileId = null;
+        if (b.profile !== undefined) updates.profile = String(b.profile).trim();
+        if (
+          b.jobProfileId !== undefined &&
+          b.jobProfileId !== null &&
+          String(b.jobProfileId).trim() !== ""
+        ) {
+          return res.status(400).json({ message: "jobProfileId requires a linked team member" });
+        }
+      } else {
+        const subject = await User.findById(effectiveSubjectId).select("jobProfiles interviewProfiles");
+        if (!subject) return res.status(400).json({ message: "Subject user not found" });
+        await migrateJobProfilesIfNeeded(subject);
+        let resolved = null;
+        if (b.jobProfileId !== undefined || b.profile !== undefined) {
+          const hasExplicitJobProfileId =
+            b.jobProfileId !== undefined &&
+            b.jobProfileId !== null &&
+            String(b.jobProfileId).trim() !== "";
+          resolved = matchProfileForSubject(subject, {
+            jobProfileIdRaw: b.jobProfileId !== undefined ? b.jobProfileId : undefined,
+            profileStr: hasExplicitJobProfileId
+              ? undefined
+              : b.profile !== undefined
+                ? b.profile
+                : undefined,
+            fallbackProfile: doc.profile
+          });
+        } else if (subjectChanged) {
+          resolved = matchProfileForSubject(subject, {
+            jobProfileIdRaw: undefined,
+            profileStr: doc.profile,
+            fallbackProfile: doc.profile
+          });
+        }
+        if (resolved) {
+          updates.jobProfileId = resolved.jobProfileId;
+          updates.profile = resolved.profile;
+        }
       }
     }
 

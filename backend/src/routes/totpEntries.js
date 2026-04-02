@@ -2,10 +2,10 @@ import express from "express";
 import mongoose from "mongoose";
 import { createGuardrails, generateSync } from "otplib";
 import { TotpEntry } from "../models/TotpEntry.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, requireApprovedUser);
 
 const MAX_ENTRIES = 40;
 const PERIOD = 30;

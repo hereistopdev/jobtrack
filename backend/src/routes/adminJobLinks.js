@@ -1,10 +1,10 @@
 import express from "express";
 import mongoose from "mongoose";
 import { JobLink } from "../models/JobLink.js";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requireAdmin, requireApprovedUser } from "../middleware/auth.js";
 
 const router = express.Router();
-router.use(requireAuth, requireAdmin);
+router.use(requireAuth, requireApprovedUser, requireAdmin);
 
 const CONFIRM_PHRASE = "DELETE_JOB_LINKS";
 

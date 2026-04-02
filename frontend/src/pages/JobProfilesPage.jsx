@@ -565,56 +565,58 @@ export default function JobProfilesPage() {
                 <p className="form-field-span2 muted-text small" style={{ margin: 0 }}>
                   Upload PDF, DOCX, or TXT — text is extracted into the resume field, and experience/education sections
                   are parsed when the file uses common section titles (e.g. &quot;Experience&quot;, &quot;Education&quot;).
-                  Save the profile first, then upload.
+                  Use &quot;Save all profiles&quot; below once so this profile has an id, then choose a file (inputs stay
+                  visible but disabled until then).
                 </p>
-                {row.id ? (
-                  <div className="form-field-span2 job-profile-upload-row">
-                    <input
-                      type="file"
-                      accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
-                      disabled={!!uploadKey}
-                      onChange={(e) => {
-                        const f = e.target.files?.[0];
-                        e.target.value = "";
-                        if (!f) return;
-                        runUpload(`resume-${idx}`, () => uploadProfileResume(row.id, f));
-                      }}
-                    />
-                    {row.resumeFile ? (
-                      <span className="job-profile-file-meta">
-                        {row.resumeFile.originalName || "Resume"}
-                        {row.resumeFile.parsedTextLength
-                          ? ` · ${row.resumeFile.parsedTextLength} chars extracted`
-                          : ""}
-                        <button
-                          type="button"
-                          className="small muted"
-                          disabled={!!uploadKey}
-                          onClick={() =>
-                            runUpload(`dl-resume-${idx}`, async () => {
-                              const blob = await fetchProfileFileBlob(row.id, { type: "resume" });
-                              triggerBlobDownload(blob, row.resumeFile?.originalName || "resume");
-                            })
-                          }
-                        >
-                          Download
-                        </button>
-                        <button
-                          type="button"
-                          className="small muted"
-                          disabled={!!uploadKey}
-                          onClick={() =>
-                            runUpload(`rm-resume-${idx}`, () => deleteProfileResumeFile(row.id))
-                          }
-                        >
-                          Remove file
-                        </button>
-                      </span>
-                    ) : null}
-                  </div>
-                ) : (
-                  <p className="form-field-span2 muted-text small">Save this profile once to enable resume upload.</p>
-                )}
+                {!row.id ? (
+                  <p className="form-field-span2 job-profile-upload-hint card" style={{ margin: 0, padding: "10px 12px" }}>
+                    <strong>Uploads locked:</strong> fill the label and click <strong>Save all profiles</strong> at the
+                    bottom, then uploads activate for this card.
+                  </p>
+                ) : null}
+                <div className="form-field-span2 job-profile-upload-row">
+                  <input
+                    type="file"
+                    accept=".pdf,.docx,.txt,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/plain"
+                    disabled={!row.id || !!uploadKey}
+                    title={!row.id ? "Save this profile first" : undefined}
+                    onChange={(e) => {
+                      const f = e.target.files?.[0];
+                      e.target.value = "";
+                      if (!f || !row.id) return;
+                      runUpload(`resume-${idx}`, () => uploadProfileResume(row.id, f));
+                    }}
+                  />
+                  {row.id && row.resumeFile ? (
+                    <span className="job-profile-file-meta">
+                      {row.resumeFile.originalName || "Resume"}
+                      {row.resumeFile.parsedTextLength
+                        ? ` · ${row.resumeFile.parsedTextLength} chars extracted`
+                        : ""}
+                      <button
+                        type="button"
+                        className="small muted"
+                        disabled={!!uploadKey}
+                        onClick={() =>
+                          runUpload(`dl-resume-${idx}`, async () => {
+                            const blob = await fetchProfileFileBlob(row.id, { type: "resume" });
+                            triggerBlobDownload(blob, row.resumeFile?.originalName || "resume");
+                          })
+                        }
+                      >
+                        Download
+                      </button>
+                      <button
+                        type="button"
+                        className="small muted"
+                        disabled={!!uploadKey}
+                        onClick={() => runUpload(`rm-resume-${idx}`, () => deleteProfileResumeFile(row.id))}
+                      >
+                        Remove file
+                      </button>
+                    </span>
+                  ) : null}
+                </div>
 
                 <label className="form-field form-field-span2">
                   <span>Resume (text)</span>
@@ -642,32 +644,36 @@ export default function JobProfilesPage() {
                 </label>
 
                 <h3 className="job-profile-section-title form-field-span2">ID & verification documents</h3>
-                {row.id ? (
-                  <div className="form-field-span2 job-profile-docs-block">
-                    <div className="job-profile-upload-inline">
-                      <select id={`id-kind-${idx}`} defaultValue="passport" className="job-profile-select">
-                        {ID_KIND_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/jpeg,image/png,image/webp,application/pdf"
-                        disabled={!!uploadKey}
-                        onChange={(e) => {
-                          const list = e.target.files;
-                          const kind = document.getElementById(`id-kind-${idx}`)?.value || "other";
-                          e.target.value = "";
-                          if (!list?.length) return;
-                          runUpload(`id-${idx}`, () =>
-                            uploadProfileIdDocuments(row.id, Array.from(list), kind)
-                          );
-                        }}
-                      />
-                    </div>
+                <div className="form-field-span2 job-profile-docs-block">
+                  <div className="job-profile-upload-inline">
+                    <select
+                      id={`id-kind-${idx}`}
+                      defaultValue="passport"
+                      className="job-profile-select"
+                      disabled={!row.id || !!uploadKey}
+                    >
+                      {ID_KIND_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      disabled={!row.id || !!uploadKey}
+                      title={!row.id ? "Save this profile first" : undefined}
+                      onChange={(e) => {
+                        const list = e.target.files;
+                        const kind = document.getElementById(`id-kind-${idx}`)?.value || "other";
+                        e.target.value = "";
+                        if (!list?.length || !row.id) return;
+                        runUpload(`id-${idx}`, () => uploadProfileIdDocuments(row.id, Array.from(list), kind));
+                      }}
+                    />
+                  </div>
+                  {row.id ? (
                     <div className="job-profile-doc-grid">
                       {(row.idDocuments || []).map((d) => (
                         <div key={d.id} className="job-profile-doc-card">
@@ -697,9 +703,7 @@ export default function JobProfilesPage() {
                               type="button"
                               className="small muted"
                               disabled={!!uploadKey}
-                              onClick={() =>
-                                runUpload(`idr-${d.id}`, () => deleteProfileIdDocument(row.id, d.id))
-                              }
+                              onClick={() => runUpload(`idr-${d.id}`, () => deleteProfileIdDocument(row.id, d.id))}
                             >
                               Delete
                             </button>
@@ -707,46 +711,51 @@ export default function JobProfilesPage() {
                         </div>
                       ))}
                     </div>
-                  </div>
-                ) : (
-                  <p className="form-field-span2 muted-text small">Save the profile to upload ID documents.</p>
-                )}
+                  ) : null}
+                </div>
 
                 <h3 className="job-profile-section-title form-field-span2">Other documents</h3>
-                {row.id ? (
-                  <div className="form-field-span2 job-profile-docs-block">
-                    <div className="job-profile-upload-inline">
-                      <select id={`other-cat-${idx}`} defaultValue="diploma" className="job-profile-select">
-                        {OTHER_DOC_OPTIONS.map((o) => (
-                          <option key={o.value} value={o.value}>
-                            {o.label}
-                          </option>
-                        ))}
-                      </select>
-                      <input
-                        type="text"
-                        id={`other-label-${idx}`}
-                        placeholder="Label (optional)"
-                        maxLength={200}
-                        className="job-profile-other-label"
-                      />
-                      <input
-                        type="file"
-                        multiple
-                        accept="image/jpeg,image/png,image/webp,application/pdf"
-                        disabled={!!uploadKey}
-                        onChange={(e) => {
-                          const list = e.target.files;
-                          const category = document.getElementById(`other-cat-${idx}`)?.value || "other";
-                          const label = document.getElementById(`other-label-${idx}`)?.value || "";
-                          e.target.value = "";
-                          if (!list?.length) return;
-                          runUpload(`oth-${idx}`, () =>
-                            uploadProfileOtherDocuments(row.id, Array.from(list), category, label)
-                          );
-                        }}
-                      />
-                    </div>
+                <div className="form-field-span2 job-profile-docs-block">
+                  <div className="job-profile-upload-inline">
+                    <select
+                      id={`other-cat-${idx}`}
+                      defaultValue="diploma"
+                      className="job-profile-select"
+                      disabled={!row.id || !!uploadKey}
+                    >
+                      {OTHER_DOC_OPTIONS.map((o) => (
+                        <option key={o.value} value={o.value}>
+                          {o.label}
+                        </option>
+                      ))}
+                    </select>
+                    <input
+                      type="text"
+                      id={`other-label-${idx}`}
+                      placeholder="Label (optional)"
+                      maxLength={200}
+                      className="job-profile-other-label"
+                      disabled={!row.id || !!uploadKey}
+                    />
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/webp,application/pdf"
+                      disabled={!row.id || !!uploadKey}
+                      title={!row.id ? "Save this profile first" : undefined}
+                      onChange={(e) => {
+                        const list = e.target.files;
+                        const category = document.getElementById(`other-cat-${idx}`)?.value || "other";
+                        const label = document.getElementById(`other-label-${idx}`)?.value || "";
+                        e.target.value = "";
+                        if (!list?.length || !row.id) return;
+                        runUpload(`oth-${idx}`, () =>
+                          uploadProfileOtherDocuments(row.id, Array.from(list), category, label)
+                        );
+                      }}
+                    />
+                  </div>
+                  {row.id ? (
                     <div className="job-profile-doc-grid">
                       {(row.otherDocuments || []).map((d) => (
                         <div key={d.id} className="job-profile-doc-card">
@@ -789,10 +798,8 @@ export default function JobProfilesPage() {
                         </div>
                       ))}
                     </div>
-                  </div>
-                ) : (
-                  <p className="form-field-span2 muted-text small">Save the profile to upload diplomas, transcripts, etc.</p>
-                )}
+                  ) : null}
+                </div>
 
                 <label className="form-field form-field-span2">
                   <span>Private notes</span>

@@ -1,16 +1,17 @@
 import express from "express";
 import { User } from "../models/User.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 import { ledgerOwnerLabelFromUserDoc } from "../utils/financeOwnerIdentity.js";
+import { CALENDAR_PROFILE_COLOR_PALETTE, coerceCalendarProfileColor } from "../utils/jobProfiles.js";
 
 const router = express.Router();
 
 /** Team roster for pickers (interviews, finance owner, etc.). Any authenticated user. */
-router.get("/directory", requireAuth, async (_req, res) => {
+router.get("/directory", requireAuth, requireApprovedUser, async (_req, res) => {
   try {
     const users = await User.find()
       .sort({ name: 1, email: 1 })
-      .select("name email financeOwnerLabel")
+      .select("name email financeOwnerLabel jobProfiles")
       .lean();
 
     const members = users.map((u) => ({
@@ -18,7 +19,14 @@ router.get("/directory", requireAuth, async (_req, res) => {
       email: u.email,
       name: u.name || "",
       displayName: (u.name || "").trim() || u.email,
-      ownerLabel: ledgerOwnerLabelFromUserDoc(u)
+      ownerLabel: ledgerOwnerLabelFromUserDoc(u),
+      jobProfiles: (u.jobProfiles || []).map((p, i) => ({
+        id: p._id.toString(),
+        label: p.label,
+        calendarColor:
+          coerceCalendarProfileColor(p.calendarColor) ??
+          CALENDAR_PROFILE_COLOR_PALETTE[i % CALENDAR_PROFILE_COLOR_PALETTE.length]
+      }))
     }));
 
     res.json({ members });

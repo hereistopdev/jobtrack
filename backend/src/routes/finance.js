@@ -3,7 +3,7 @@ import mongoose from "mongoose";
 import multer from "multer";
 import { FinanceTransaction } from "../models/FinanceTransaction.js";
 import { User } from "../models/User.js";
-import { requireAuth, requireAdmin } from "../middleware/auth.js";
+import { requireAuth, requireAdmin, requireApprovedUser } from "../middleware/auth.js";
 import {
   attachRunningBalances,
   buildByOwnerSummary,
@@ -16,7 +16,7 @@ import { findDuplicateFinanceRow } from "../utils/duplicateFinanceTransaction.js
 import { ledgerOwnerLabelFromUserDoc, normalizeOwnerName } from "../utils/financeOwnerIdentity.js";
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, requireApprovedUser);
 
 async function attachFinanceViewer(req, res, next) {
   try {

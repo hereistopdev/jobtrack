@@ -2,7 +2,7 @@ import express from "express";
 import multer from "multer";
 import { JobLink } from "../models/JobLink.js";
 import { parseJobUrl } from "../services/parseJobUrl.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 import { canModifyJobLink } from "../utils/jobPermissions.js";
 import { findDuplicateJobLink, formatDuplicateResponse } from "../utils/duplicateJobLink.js";
 import { importJobLinksFromExcelBuffer } from "../utils/excelJobImport.js";
@@ -18,7 +18,7 @@ const upload = multer({
   }
 });
 
-router.use(requireAuth);
+router.use(requireAuth, requireApprovedUser);
 
 router.post("/parse", async (req, res) => {
   try {

@@ -2,11 +2,11 @@ import mongoose from "mongoose";
 import express from "express";
 import { JobLink } from "../models/JobLink.js";
 import { User } from "../models/User.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 
 const router = express.Router();
 
-router.use(requireAuth);
+router.use(requireAuth, requireApprovedUser);
 
 const STATUS_VALUES = ["Saved", "Applied", "Interview", "Offer", "Rejected"];
 

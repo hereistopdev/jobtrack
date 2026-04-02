@@ -13,6 +13,8 @@ const interviewRecordSchema = new mongoose.Schema(
     company: { type: String, required: true, trim: true },
     roleTitle: { type: String, required: true, trim: true },
     profile: { type: String, trim: true, default: "" },
+    /** Subject user's job profile subdocument id (when subject is linked). */
+    jobProfileId: { type: mongoose.Schema.Types.ObjectId, default: null },
     stack: { type: String, trim: true, default: "" },
     scheduledAt: { type: Date, required: true },
     /** End of slot (exclusive of overlap logic uses standard overlap). If omitted, defaults to start + 1h in API. */

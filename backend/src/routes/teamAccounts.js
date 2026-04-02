@@ -1,10 +1,10 @@
 import express from "express";
 import mongoose from "mongoose";
 import { TeamAccount, TEAM_ACCOUNT_CATEGORIES } from "../models/TeamAccount.js";
-import { requireAuth } from "../middleware/auth.js";
+import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 
 const router = express.Router();
-router.use(requireAuth);
+router.use(requireAuth, requireApprovedUser);
 
 const MAX_PER_USER = 100;
 
