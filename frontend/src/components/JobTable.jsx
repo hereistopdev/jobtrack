@@ -41,13 +41,13 @@ function JobTable({
     if (totalLinksCount > 0) {
       return (
         <div className="card empty-state">
-          <p>No job links match your search, role filter, or date filters. Try adjusting filters.</p>
+          <p>No jobs match your search, role filter, or date filters. Try adjusting filters.</p>
         </div>
       );
     }
     return (
       <div className="card empty-state">
-        <p>No job links yet. Add one from the form above.</p>
+        <p>No jobs yet. Add one from the form above.</p>
       </div>
     );
   }
@@ -181,7 +181,7 @@ function JobTable({
                           type="button"
                           className="icon-btn"
                           title="Edit"
-                          aria-label="Edit job link"
+                          aria-label="Edit job"
                           onClick={() => onEdit(item)}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>
@@ -193,7 +193,7 @@ function JobTable({
                           type="button"
                           className="icon-btn icon-btn-danger"
                           title="Delete"
-                          aria-label="Delete job link"
+                          aria-label="Delete job"
                           onClick={() => onDelete(item._id)}
                         >
                           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden>

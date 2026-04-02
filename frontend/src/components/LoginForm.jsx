@@ -8,17 +8,27 @@ function LoginForm() {
   const [password, setPassword] = useState("");
   const [name, setName] = useState("");
   const [error, setError] = useState("");
+  const [successMessage, setSuccessMessage] = useState("");
   const [busy, setBusy] = useState(false);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
     setError("");
+    setSuccessMessage("");
     setBusy(true);
     try {
       if (mode === "login") {
         await login(email, password);
       } else {
-        await register(email, password, name);
+        const result = await register(email, password, name);
+        if (result?.pending) {
+          setSuccessMessage(
+            result.message ||
+              "Your account was created. An administrator must approve it before you can sign in."
+          );
+          setMode("login");
+          setPassword("");
+        }
       }
     } catch (err) {
       setError(err.message || "Something went wrong");
@@ -30,20 +40,30 @@ function LoginForm() {
   return (
     <form className="card auth-card" onSubmit={handleSubmit}>
       <h1>JobTrack</h1>
-      <p className="auth-lead">Sign in with your work email to manage team job links.</p>
+      <p className="auth-lead">
+        {mode === "register"
+          ? "Create an account with your work email. An administrator must approve new signups before you can use the app."
+          : "Sign in with your work email to manage team jobs."}
+      </p>
 
       <div className="auth-tabs">
         <button
           type="button"
           className={mode === "login" ? "active" : ""}
-          onClick={() => setMode("login")}
+          onClick={() => {
+            setMode("login");
+            setSuccessMessage("");
+          }}
         >
           Sign in
         </button>
         <button
           type="button"
           className={mode === "register" ? "active" : ""}
-          onClick={() => setMode("register")}
+          onClick={() => {
+            setMode("register");
+            setSuccessMessage("");
+          }}
         >
           Create account
         </button>
@@ -85,6 +105,7 @@ function LoginForm() {
         <p className="field-hint">Use at least 8 characters.</p>
       )}
 
+      {successMessage && <div className="auth-success">{successMessage}</div>}
       {error && <div className="auth-error">{error}</div>}
 
       <button type="submit" disabled={busy} className="full-width-submit">

@@ -31,7 +31,7 @@ export default function ExcelImportCard({ onImported }) {
   };
 
   return (
-    <section className="card excel-import-card" aria-label="Import job links from Excel">
+    <section className="card excel-import-card" aria-label="Import jobs from Excel">
       <h2>Import from Excel</h2>
       <p className="field-hint">
         First row = column headers. Required columns: <strong>link</strong>, <strong>company</strong>,{" "}

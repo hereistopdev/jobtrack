@@ -3,13 +3,13 @@ import { useAuth } from "./context/AuthContext";
 import AppLayout from "./components/AppLayout";
 import LoginForm from "./components/LoginForm";
 import DashboardPage from "./pages/DashboardPage";
-import AnalyticsPage from "./pages/AnalyticsPage";
 import UsersPage from "./pages/UsersPage";
 import FinancePage from "./pages/FinancePage";
 import InterviewsPage from "./pages/InterviewsPage";
 import InterviewCalendarPage from "./pages/InterviewCalendarPage";
 import AccountsPage from "./pages/AccountsPage";
 import ProfilePage from "./pages/ProfilePage";
+import JobProfilesPage from "./pages/JobProfilesPage";
 
 function App() {
   const { user, loading } = useAuth();
@@ -33,25 +33,28 @@ function App() {
   return (
     <Routes>
       <Route element={<AppLayout />}>
-        <Route path="/" element={<DashboardPage />} />
-        <Route path="/analytics" element={<AnalyticsPage />} />
-        <Route path="/pipeline" element={<Navigate to="/" replace />} />
+        <Route path="/jobs" element={<DashboardPage />} />
+        <Route path="/" element={<Navigate to="/jobs" replace />} />
+        <Route path="/analytics" element={<Navigate to="/jobs?tab=dashboard" replace />} />
+        <Route path="/jobs/dashboard" element={<Navigate to="/jobs?tab=dashboard" replace />} />
+        <Route path="/pipeline" element={<Navigate to="/jobs" replace />} />
         <Route path="/interviews" element={<InterviewsPage />} />
         <Route path="/interviews/calendar" element={<InterviewCalendarPage />} />
         <Route path="/accounts" element={<AccountsPage />} />
         <Route path="/profile" element={<ProfilePage />} />
+        <Route path="/job-profiles" element={<JobProfilesPage />} />
         <Route
           path="/users"
-          element={user.role === "admin" ? <UsersPage /> : <Navigate to="/" replace />}
+          element={user.role === "admin" ? <UsersPage /> : <Navigate to="/jobs" replace />}
         />
         <Route
           path="/finance"
           element={
-            user.role === "admin" || user.financeAccess ? <FinancePage /> : <Navigate to="/" replace />
+            user.role === "admin" || user.financeAccess ? <FinancePage /> : <Navigate to="/jobs" replace />
           }
         />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/jobs" replace />} />
     </Routes>
   );
 }

@@ -47,11 +47,11 @@ export default function JobBidStatusDashboard({ links, rows: rowsFromApi }) {
           <h2 className="table-card-title">Bid status by teammate</h2>
           <p className="dashboard-bid-dash-hint muted-text">
             Stacked counts per person: Saved → Applied → Interview → Offer / Rejected. Based on each row&apos;s status.
-            {totalJobs > 0 ? ` ${totalJobs} job link${totalJobs === 1 ? "" : "s"} total.` : ""}
+            {totalJobs > 0 ? ` ${totalJobs} job${totalJobs === 1 ? "" : "s"} total.` : ""}
           </p>
           <div className="analytics-chart-wrap">
             {!hasTeam ? (
-              <p className="analytics-empty">No teammate-owned links yet. Add a job link to see this chart.</p>
+              <p className="analytics-empty">No teammate-owned jobs yet. Add a job to see this chart.</p>
             ) : (
               <ResponsiveContainer width="100%" height={320}>
                 <BarChart

@@ -18,7 +18,7 @@ function StackedPipelineChart({ data, title, hint }) {
       <div className="pipeline-time-chart-wrap">
         <div className="pipeline-time-chart-inner">
           {!hasData ? (
-            <p className="analytics-empty">No job links in this range yet.</p>
+            <p className="analytics-empty">No jobs in this range yet.</p>
           ) : (
             <ResponsiveContainer width="100%" height={320}>
               <BarChart data={data} margin={{ left: 8, right: 16, top: 8, bottom: 8 }}>
@@ -63,7 +63,7 @@ export default function JobLinksPipelineSection({ links, series, timeTab, onTime
 
   const chartHint =
     series?.meta &&
-    "Counts are job links added in each period (created time), stacked by current status.";
+    "Counts are jobs added in each period (created time), stacked by current status.";
 
   return (
     <div className="joblinks-pipeline-section">

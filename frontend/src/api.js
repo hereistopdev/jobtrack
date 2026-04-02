@@ -67,6 +67,106 @@ export async function patchMyProfile(body) {
   return data;
 }
 
+/** POST multipart — PDF, DOCX, or TXT; extracted text fills resumeText. */
+export async function uploadProfileResume(profileId, file) {
+  const fd = new FormData();
+  fd.append("file", file);
+  const res = await fetch(`${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/resume`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: fd
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Upload failed (${res.status})`);
+  return data;
+}
+
+export async function uploadProfileIdDocument(profileId, file, kind) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("kind", kind);
+  const res = await fetch(`${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/id-documents`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: fd
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Upload failed (${res.status})`);
+  return data;
+}
+
+export async function uploadProfileOtherDocument(profileId, file, category, label) {
+  const fd = new FormData();
+  fd.append("file", file);
+  fd.append("category", category);
+  fd.append("label", label || "");
+  const res = await fetch(`${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/other-documents`, {
+    method: "POST",
+    headers: { ...authHeaders() },
+    body: fd
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Upload failed (${res.status})`);
+  return data;
+}
+
+export async function deleteProfileResumeFile(profileId) {
+  const res = await fetch(`${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/resume`, {
+    method: "DELETE",
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function deleteProfileIdDocument(profileId, docId) {
+  const res = await fetch(
+    `${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/id-documents/${encodeURIComponent(docId)}`,
+    { method: "DELETE", headers: { ...authHeaders() } }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function deleteProfileOtherDocument(profileId, docId) {
+  const res = await fetch(
+    `${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/other-documents/${encodeURIComponent(docId)}`,
+    { method: "DELETE", headers: { ...authHeaders() } }
+  );
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+/** Authenticated download (opens save). */
+export async function fetchProfileFileBlob(profileId, { type, docId }) {
+  const q = new URLSearchParams({ type });
+  if (docId) q.set("docId", docId);
+  const res = await fetch(
+    `${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/files?${q}`,
+    { headers: { ...authHeaders() } }
+  );
+  if (!res.ok) {
+    const data = await res.json().catch(() => ({}));
+    throw new Error(data.message || `Download failed (${res.status})`);
+  }
+  return res.blob();
+}
+
+export function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename || "download";
+  a.rel = "noopener";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}
+
 /** @deprecated Prefer managing job profiles on Profile; kept for minimal label-only updates. */
 export async function patchMyInterviewProfiles(interviewProfiles) {
   return patchMyProfile({ interviewProfiles });
@@ -207,6 +307,16 @@ export async function updateAdminUser(id, body) {
     method: "PATCH",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(body)
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
+export async function deleteAdminUser(id) {
+  const res = await fetch(`${API_BASE_URL}/admin/users/${encodeURIComponent(id)}`, {
+    method: "DELETE",
+    headers: { ...authHeaders() }
   });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);

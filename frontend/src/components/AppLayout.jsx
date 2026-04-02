@@ -7,7 +7,7 @@ export default function AppLayout() {
   return (
     <div className="app-shell">
       <header className="app-nav">
-        <NavLink to="/" className={({ isActive }) => `app-brand${isActive ? " active" : ""}`} end>
+        <NavLink to="/jobs" className={({ isActive }) => `app-brand${isActive ? " active" : ""}`}>
           JobTrack
         </NavLink>
         <nav className="app-nav-links" aria-label="Main">
@@ -17,11 +17,14 @@ export default function AppLayout() {
           >
             Calendar
           </NavLink>
-          <NavLink to="/" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`} end>
-            Job links
+          <NavLink to="/jobs" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
+            Jobs
           </NavLink>
-          <NavLink to="/analytics" className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}>
-            Analytics
+          <NavLink
+            to="/job-profiles"
+            className={({ isActive }) => `app-nav-link${isActive ? " active" : ""}`}
+          >
+            Job Profiles
           </NavLink>
           <NavLink
             to="/interviews"

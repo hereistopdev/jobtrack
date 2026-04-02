@@ -26,7 +26,8 @@ function monthLabel(ym) {
   return d.toLocaleDateString(undefined, { month: "short", year: "numeric" });
 }
 
-export default function AnalyticsPage() {
+/** Analytics charts for the Jobs board (embedded next to List / Pipeline). */
+export default function AnalyticsDashboardPanel() {
   const [data, setData] = useState(null);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -66,27 +67,22 @@ export default function AnalyticsPage() {
   }));
 
   return (
-    <main className="container container-dashboard analytics-page">
-      <header className="page-header page-header-row">
-        <div>
-          <h1>Analytics</h1>
-          <p>Who added job links over time, and status mix.</p>
-        </div>
+    <div className="analytics-dashboard-embed analytics-page">
+      <div className="analytics-dashboard-toolbar card">
+        <p className="analytics-dashboard-lead">Team overview: who added jobs over time and status mix.</p>
         {data && !loading && (
           <button
             type="button"
             className="small muted table-export-btn"
-            disabled={
-              !(data.byUser?.length || data.byMonth?.length || data.statusBreakdown?.length)
-            }
+            disabled={!(data.byUser?.length || data.byMonth?.length || data.statusBreakdown?.length)}
             onClick={() => exportAnalyticsToXlsx(data, "analytics")}
           >
             Export XLSX
           </button>
         )}
-      </header>
+      </div>
 
-      {loading && <div className="card">Loading analytics…</div>}
+      {loading && <div className="card">Loading dashboard…</div>}
       {error && <div className="card error">{error}</div>}
 
       {data && !loading && (
@@ -94,7 +90,7 @@ export default function AnalyticsPage() {
           <div className="analytics-kpis card">
             <div className="analytics-kpi">
               <span className="analytics-kpi-value">{data.totalLinks}</span>
-              <span className="analytics-kpi-label">Job links</span>
+              <span className="analytics-kpi-label">Jobs</span>
             </div>
             <div className="analytics-kpi">
               <span className="analytics-kpi-value">{data.userCount}</span>
@@ -143,7 +139,14 @@ export default function AnalyticsPage() {
                       <XAxis dataKey="label" tick={{ fontSize: 10 }} />
                       <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
                       <Tooltip formatter={(value) => [value, "Links"]} />
-                      <Line type="monotone" dataKey="count" stroke="#7c3aed" strokeWidth={2} dot={{ r: 3 }} name="Added" />
+                      <Line
+                        type="monotone"
+                        dataKey="count"
+                        stroke="#7c3aed"
+                        strokeWidth={2}
+                        dot={{ r: 3 }}
+                        name="Added"
+                      />
                     </LineChart>
                   </ResponsiveContainer>
                 )}
@@ -181,6 +184,6 @@ export default function AnalyticsPage() {
           </div>
         </>
       )}
-    </main>
+    </div>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import {
   addJobInterview,
   createJobLink,
@@ -9,6 +10,7 @@ import {
   updateJobLink
 } from "../api";
 import { useAuth } from "../context/AuthContext";
+import AnalyticsDashboardPanel from "../components/AnalyticsDashboardPanel";
 import JobForm from "../components/JobForm";
 import ExcelImportCard from "../components/ExcelImportCard";
 import JobLinksPipelineSection from "../components/JobLinksPipelineSection";
@@ -26,8 +28,15 @@ function canModifyRow(item, user) {
   return oid === user.id;
 }
 
+const DASH_TABS = ["dashboard", "list", "pipeline"];
+
+function validDashTab(t) {
+  return DASH_TABS.includes(t);
+}
+
 export default function DashboardPage() {
   const { user } = useAuth();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [links, setLinks] = useState([]);
   const [editingItem, setEditingItem] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -39,7 +48,10 @@ export default function DashboardPage() {
   const [sort, setSort] = useState({ key: "date", dir: "desc" });
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
-  const [dashTab, setDashTab] = useState("list");
+  const [dashTab, setDashTab] = useState(() => {
+    const t = searchParams.get("tab");
+    return validDashTab(t) ? t : "list";
+  });
   const [pipelineSeries, setPipelineSeries] = useState(null);
   const [pipelineSeriesError, setPipelineSeriesError] = useState("");
   const [pipelineSeriesLoading, setPipelineSeriesLoading] = useState(false);
@@ -101,6 +113,21 @@ export default function DashboardPage() {
   }, []);
 
   useEffect(() => {
+    const t = searchParams.get("tab");
+    if (validDashTab(t)) setDashTab(t);
+    else setDashTab("list");
+  }, [searchParams]);
+
+  const selectDashTab = (t) => {
+    setDashTab(t);
+    if (t === "list") {
+      setSearchParams({}, { replace: true });
+    } else {
+      setSearchParams({ tab: t }, { replace: true });
+    }
+  };
+
+  useEffect(() => {
     if (dashTab !== "pipeline") return;
     if (pipelineSeries) return;
     let cancelled = false;
@@ -150,7 +177,7 @@ export default function DashboardPage() {
   };
 
   const handleDelete = async (id) => {
-    const confirmed = window.confirm("Delete this job link?");
+    const confirmed = window.confirm("Delete this job?");
     if (!confirmed) return;
 
     try {
@@ -310,16 +337,17 @@ export default function DashboardPage() {
     <main className="container container-dashboard">
       <header className="page-header page-header-row">
         <div>
-          <h1>Job links</h1>
+          <h1>Jobs</h1>
           <p>
-            Everyone on the team sees all job links and who added each one. Use the right-hand List / Pipeline switch to
-            browse the table or bid status over time. Filters and pagination apply to the list.
+            Everyone on the team sees all jobs and who added each one. Use <strong>Dashboard</strong> in the right-hand
+            rail for team analytics, or <strong>List</strong> / <strong>Pipeline</strong> to browse the table or bid
+            status over time. Filters and pagination apply to the list.
           </p>
         </div>
       </header>
 
       <div className="dashboard-split">
-        <aside className="dashboard-panel dashboard-panel-left" aria-label="Add job link">
+        <aside className="dashboard-panel dashboard-panel-left" aria-label="Add job">
           <JobForm
             linkInputRef={jobLinkInputRef}
             onSubmit={handleSubmit}
@@ -332,11 +360,15 @@ export default function DashboardPage() {
         <div
           className={`dashboard-panel dashboard-panel-right dashboard-joblinks-panel${
             dashTab === "pipeline" ? " dashboard-joblinks-panel-pipeline" : ""
-          }`}
+          }${dashTab === "dashboard" ? " dashboard-joblinks-panel-dashboard" : ""}`}
         >
           <div
             className={`finance-dash-shell dashboard-joblinks-shell${
-              dashTab === "pipeline" ? " dashboard-joblinks-shell-pipeline" : ""
+              dashTab === "pipeline"
+                ? " dashboard-joblinks-shell-pipeline"
+                : dashTab === "dashboard"
+                  ? " dashboard-joblinks-shell-dashboard"
+                  : ""
             }`}
           >
             <div
@@ -346,6 +378,8 @@ export default function DashboardPage() {
               aria-labelledby={`joblinks-dash-tab-${dashTab}`}
               tabIndex={-1}
             >
+              {dashTab === "dashboard" && <AnalyticsDashboardPanel />}
+
               {dashTab === "list" && (
                 <>
           <section className="toolbar card toolbar-extended">
@@ -405,7 +439,7 @@ export default function DashboardPage() {
 
           {error && <div className="card error">{error}</div>}
           {loading ? (
-            <div className="card">Loading job links...</div>
+            <div className="card">Loading jobs…</div>
           ) : (
             <>
               <PaginationBar
@@ -438,7 +472,7 @@ export default function DashboardPage() {
                     type="button"
                     className="small muted table-export-btn"
                     disabled={sortedFilteredLinks.length === 0}
-                    onClick={() => exportJobLinksToXlsx(sortedFilteredLinks, "job-links")}
+                    onClick={() => exportJobLinksToXlsx(sortedFilteredLinks, "jobs")}
                   >
                     Export XLSX
                   </button>
@@ -463,8 +497,19 @@ export default function DashboardPage() {
               )}
             </div>
 
-            <nav className="finance-dash-tabs-nav" aria-label="Job links sections">
+            <nav className="finance-dash-tabs-nav" aria-label="Board sections">
               <div className="finance-dash-tabs-rail" role="tablist" aria-orientation="vertical">
+                <button
+                  type="button"
+                  id="joblinks-dash-tab-dashboard"
+                  role="tab"
+                  aria-selected={dashTab === "dashboard"}
+                  aria-controls="joblinks-dash-panel"
+                  className={`finance-dash-tab-btn${dashTab === "dashboard" ? " is-active" : ""}`}
+                  onClick={() => selectDashTab("dashboard")}
+                >
+                  Dashboard
+                </button>
                 <button
                   type="button"
                   id="joblinks-dash-tab-list"
@@ -472,7 +517,7 @@ export default function DashboardPage() {
                   aria-selected={dashTab === "list"}
                   aria-controls="joblinks-dash-panel"
                   className={`finance-dash-tab-btn${dashTab === "list" ? " is-active" : ""}`}
-                  onClick={() => setDashTab("list")}
+                  onClick={() => selectDashTab("list")}
                 >
                   List
                 </button>
@@ -483,7 +528,7 @@ export default function DashboardPage() {
                   aria-selected={dashTab === "pipeline"}
                   aria-controls="joblinks-dash-panel"
                   className={`finance-dash-tab-btn${dashTab === "pipeline" ? " is-active" : ""}`}
-                  onClick={() => setDashTab("pipeline")}
+                  onClick={() => selectDashTab("pipeline")}
                 >
                   Pipeline
                 </button>

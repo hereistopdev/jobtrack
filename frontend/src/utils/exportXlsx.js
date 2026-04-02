@@ -64,10 +64,10 @@ export function buildJobLinkExportRows(items) {
   });
 }
 
-export function exportJobLinksToXlsx(items, filename = "job-links") {
+export function exportJobLinksToXlsx(items, filename = "jobs") {
   const rows = buildJobLinkExportRows(items);
   if (!rows.length) return;
-  downloadXlsxSheet(rows, filename, "Job links");
+  downloadXlsxSheet(rows, filename, "Jobs");
 }
 
 export function exportFinanceByOwnerToXlsx(rows, filename = "finance-by-owner") {
@@ -104,6 +104,7 @@ export function exportUsersToXlsx(users, filename = "users") {
   const rows = users.map((u) => ({
     Email: u.email ?? "",
     Name: u.name ?? "",
+    "Signup approved": u.signupApproved === false ? "no" : "yes",
     "Finance owner": u.financeOwnerLabel ?? "",
     Role: u.role ?? "",
     Joined: u.createdAt ? new Date(u.createdAt).toISOString().slice(0, 10) : ""

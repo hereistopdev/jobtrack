@@ -180,6 +180,14 @@ body {
   font-size: 0.9rem;
 }
 
+.auth-success {
+  padding: 10px;
+  border-radius: 8px;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 0.9rem;
+}
+
 .full-width-submit {
   width: 100%;
   margin-top: 8px;
@@ -948,6 +956,188 @@ th {
   gap: 6px;
 }
 
+/* Embedded analytics on Jobs board */
+.analytics-dashboard-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.analytics-dashboard-lead {
+  margin: 0;
+  font-size: 0.9rem;
+  color: #4b5563;
+  max-width: 42rem;
+}
+
+/* Job Profiles page */
+.job-profiles-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.job-profile-editor-card {
+  margin-bottom: 0;
+}
+
+.job-profile-editor-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.job-profile-editor-head .table-card-title {
+  margin: 0;
+}
+
+.form-field-calendar-color {
+  grid-column: 1 / -1;
+}
+
+@media (min-width: 640px) {
+  .form-field-calendar-color {
+    grid-column: auto;
+  }
+}
+
+.calendar-color-swatches {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 6px;
+  max-width: 280px;
+  margin-top: 4px;
+}
+
+.calendar-color-swatch {
+  width: 100%;
+  aspect-ratio: 1;
+  min-height: 0;
+  padding: 0;
+  border: 2px solid #e5e7eb;
+  border-radius: 6px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.calendar-color-swatch:hover {
+  filter: brightness(1.06);
+}
+
+.calendar-color-swatch.selected {
+  border-color: #111827;
+  box-shadow: 0 0 0 2px #fff inset;
+}
+
+.calendar-color-swatch:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.job-profile-resume-textarea {
+  font-family: ui-monospace, "Cascadia Code", "Segoe UI Mono", monospace;
+  font-size: 0.8rem;
+  line-height: 1.45;
+}
+
+.job-profiles-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+.job-profile-section-title {
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin: 1rem 0 0.25rem;
+  color: #374151;
+  border-bottom: 1px solid #e5e7eb;
+  padding-bottom: 4px;
+}
+
+.job-profile-repeatable {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.job-profile-repeatable-block {
+  margin: 0;
+  padding: 12px;
+  background: #f9fafb;
+}
+
+.job-profile-repeatable-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.job-profile-upload-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.job-profile-file-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.9rem;
+}
+
+.job-profile-docs-block {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.job-profile-upload-inline {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.job-profile-select {
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 0.9rem;
+}
+
+.job-profile-other-label {
+  min-width: 140px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid #d1d5db;
+  font-size: 0.9rem;
+}
+
+.job-profile-doc-list {
+  margin: 0;
+  padding-left: 1.1rem;
+  list-style: disc;
+}
+
+.job-profile-doc-list li {
+  margin-bottom: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
 .app-nav-badge {
   font-size: 0.65rem;
   text-transform: uppercase;
@@ -1043,7 +1233,58 @@ th {
 }
 
 .users-table .th-name {
-  width: 14%;
+  width: 12%;
+}
+
+.users-table .th-access {
+  width: 9rem;
+  min-width: 8rem;
+}
+
+.users-access-cell {
+  white-space: nowrap;
+}
+
+.users-pending-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.users-pending-badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  background: #fef3c7;
+  color: #92400e;
+}
+
+.users-active-label {
+  font-size: 0.85rem;
+  color: #6b7280;
+}
+
+.users-approve-btn {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  background: #2563eb;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.users-approve-btn:hover:not(:disabled) {
+  background: #1d4ed8;
+}
+
+.users-approve-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .users-table .th-finance-owner {
@@ -1066,6 +1307,39 @@ th {
 
 .users-table .th-date {
   width: 7rem;
+}
+
+.users-table .th-actions {
+  width: 5.5rem;
+  text-align: right;
+}
+
+.users-actions-cell {
+  text-align: right;
+}
+
+.users-delete-btn {
+  font-size: 0.75rem;
+  padding: 4px 10px;
+  background: #fef2f2;
+  color: #b91c1c;
+  border: 1px solid #fecaca;
+  border-radius: 6px;
+  cursor: pointer;
+  font: inherit;
+}
+
+.users-delete-btn:hover:not(:disabled) {
+  background: #fee2e2;
+}
+
+.users-delete-btn:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.users-delete-hint {
+  font-size: 0.85rem;
 }
 
 .admin-bulk-delete-card {
@@ -1502,7 +1776,7 @@ th {
   min-height: min(62vh, 560px);
 }
 
-/* Job links page: List | Pipeline rail */
+/* Jobs board page: Dashboard | List | Pipeline rail */
 .dashboard-joblinks-panel .finance-dash-shell {
   margin-top: 0;
 }
@@ -1513,6 +1787,10 @@ th {
 }
 
 .dashboard-joblinks-shell-pipeline {
+  min-height: min(62vh, 560px);
+}
+
+.dashboard-joblinks-shell-dashboard {
   min-height: min(62vh, 560px);
 }
 

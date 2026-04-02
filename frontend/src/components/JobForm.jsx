@@ -100,10 +100,10 @@ function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef }) {
 
   return (
     <form className="card form-grid" onSubmit={handleSubmit}>
-      <h2>{editingItem ? "Edit Job Link" : "Add Job Link"}</h2>
+      <h2>{editingItem ? "Edit job" : "Add job"}</h2>
 
       <label className="full-width">
-        Job link
+        Job URL
         <span className="field-hint">
           Paste a posting URL to autofill company, role, and sometimes a short description from the page (best effort;
           many ATS sites block automated reads).

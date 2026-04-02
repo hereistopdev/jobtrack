@@ -46,10 +46,18 @@ export function AuthProvider({ children }) {
   }, []);
 
   const register = useCallback(async (email, password, name) => {
-    const { token: t, user: u } = await apiRegister(email, password, name);
+    const data = await apiRegister(email, password, name);
+    if (data.pendingApproval) {
+      return {
+        pending: true,
+        message: data.message || "An administrator must approve your account before you can sign in."
+      };
+    }
+    const { token: t, user: u } = data;
     localStorage.setItem(TOKEN_KEY, t);
     setToken(t);
     setUser(u);
+    return { pending: false };
   }, []);
 
   const logout = useCallback(() => {
