@@ -223,12 +223,16 @@ function formatRangeInZone(ev, zone) {
   return `${s.toFormat("EEE, MMM d · h:mm a")} – ${e.toFormat("h:mm a")}`;
 }
 
+/** @typedef {"day" | "week" | "month"} CalViewMode */
+
 export default function InterviewCalendarPage() {
   const navigate = useNavigate();
   const [calendarTz, setCalendarTz] = useState(CALENDAR_DEFAULT_TZ);
-  const [weekMondayIso, setWeekMondayIso] = useState(() =>
-    startOfWeekMondayInZone(new Date(), CALENDAR_DEFAULT_TZ).toISODate()
+  /** Anchor date (YYYY-MM-DD in `calendarTz`) for whichever view is active. */
+  const [viewDateIso, setViewDateIso] = useState(() =>
+    DateTime.now().setZone(CALENDAR_DEFAULT_TZ).toISODate()
   );
+  const [viewMode, setViewMode] = useState(/** @type {CalViewMode} */ ("week"));
   const [rows, setRows] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -257,19 +261,46 @@ export default function InterviewCalendarPage() {
     return base;
   }, [calendarTz, timeZoneIds, timeZoneSelectOptions]);
 
-  const weekMondayDt = useMemo(() => {
-    const base = DateTime.fromISO(`${weekMondayIso}T00:00:00`, { zone: calendarTz });
-    return base.isValid ? base : startOfWeekMondayInZone(new Date(), calendarTz);
-  }, [weekMondayIso, calendarTz]);
+  const anchorDt = useMemo(() => {
+    const base = DateTime.fromISO(`${viewDateIso}T00:00:00`, { zone: calendarTz });
+    return base.isValid ? base : DateTime.now().setZone(calendarTz).startOf("day");
+  }, [viewDateIso, calendarTz]);
 
-  const weekDays = useMemo(() => {
-    const out = [];
-    for (let i = 0; i < 7; i++) out.push(weekMondayDt.plus({ days: i }));
-    return out;
-  }, [weekMondayDt]);
+  /** Days shown in the current view (week: 7 Mon–Sun, day: 1, month: 42-cell grid). */
+  const visibleDays = useMemo(() => {
+    if (viewMode === "week") {
+      const mon = startOfWeekMondayInZone(anchorDt.toJSDate(), calendarTz);
+      return Array.from({ length: 7 }, (_, i) => mon.plus({ days: i }));
+    }
+    if (viewMode === "day") {
+      return [anchorDt.startOf("day")];
+    }
+    const monthStart = anchorDt.startOf("month");
+    const gridStart =
+      monthStart.weekday === 1 ? monthStart : monthStart.minus({ days: monthStart.weekday - 1 });
+    return Array.from({ length: 42 }, (_, i) => gridStart.plus({ days: i }));
+  }, [viewMode, anchorDt, calendarTz]);
 
-  const fromIso = useMemo(() => weekMondayDt.toUTC().toISO(), [weekMondayDt]);
-  const toIso = useMemo(() => weekMondayDt.plus({ days: 7 }).toUTC().toISO(), [weekMondayDt]);
+  const fromIso = useMemo(
+    () => visibleDays[0].startOf("day").toUTC().toISO(),
+    [visibleDays]
+  );
+  const toIso = useMemo(
+    () => visibleDays[visibleDays.length - 1].plus({ days: 1 }).startOf("day").toUTC().toISO(),
+    [visibleDays]
+  );
+
+  const rangeTitle = useMemo(() => {
+    if (viewMode === "day") return anchorDt.toFormat("EEEE, MMMM d, yyyy");
+    if (viewMode === "week") {
+      const a = visibleDays[0];
+      const b = visibleDays[6];
+      if (a.month === b.month && a.year === b.year) return `${a.toFormat("MMM d")} – ${b.toFormat("d, yyyy")}`;
+      if (a.year === b.year) return `${a.toFormat("MMM d")} – ${b.toFormat("MMM d, yyyy")}`;
+      return `${a.toFormat("MMM d, yyyy")} – ${b.toFormat("MMM d, yyyy")}`;
+    }
+    return anchorDt.toFormat("MMMM yyyy");
+  }, [viewMode, anchorDt, visibleDays]);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -295,16 +326,17 @@ export default function InterviewCalendarPage() {
   }, []);
 
   const nowLine = useMemo(() => {
+    if (viewMode === "month") return null;
     const now = DateTime.now().setZone(calendarTz);
     const todayIso = now.toISODate();
-    const inWeek = weekDays.some((d) => d.toISODate() === todayIso);
-    if (!inWeek) return null;
+    const inRange = visibleDays.some((d) => d.toISODate() === todayIso);
+    if (!inRange) return null;
     const dayStart = DateTime.fromISO(`${todayIso}T00:00:00`, { zone: calendarTz });
     const minutesFromMidnight = now.diff(dayStart, "minutes").minutes;
     const top = (minutesFromMidnight / SLOT_MINUTES) * PX_PER_SLOT;
     const clamped = Math.max(0, Math.min(top, GRID_HEIGHT - 2));
     return { top: clamped, label: now.toFormat("h:mm a") };
-  }, [calendarTz, weekDays, nowTick]);
+  }, [calendarTz, visibleDays, nowTick, viewMode]);
 
   const referenceTzNowLabel = useMemo(() => {
     const dt = DateTime.now().setZone(CALENDAR_REFERENCE_TZ);
@@ -335,12 +367,12 @@ export default function InterviewCalendarPage() {
 
   const byDay = useMemo(() => {
     const map = new Map();
-    for (const d of weekDays) {
+    for (const d of visibleDays) {
       const key = d.toISODate();
       map.set(key, []);
     }
     for (const ev of rows) {
-      for (const d of weekDays) {
+      for (const d of visibleDays) {
         const dayStart = d;
         if (eventOverlapsDay(ev, dayStart, calendarTz)) {
           map.get(dayStart.toISODate()).push(ev);
@@ -348,7 +380,7 @@ export default function InterviewCalendarPage() {
       }
     }
     return map;
-  }, [rows, weekDays, calendarTz]);
+  }, [rows, visibleDays, calendarTz]);
 
   /**
    * Per calendar column: ids that overlap someone else **on that same day** (same rules as clusters).
@@ -357,7 +389,7 @@ export default function InterviewCalendarPage() {
    */
   const overlapIdsByDay = useMemo(() => {
     const map = new Map();
-    for (const d of weekDays) {
+    for (const d of visibleDays) {
       const key = d.toISODate();
       const ids = new Set();
       const list = byDay.get(key) || [];
@@ -376,12 +408,12 @@ export default function InterviewCalendarPage() {
       map.set(key, ids);
     }
     return map;
-  }, [byDay, weekDays, calendarTz]);
+  }, [byDay, visibleDays, calendarTz]);
 
   /** Per ISO date: array of overlap clusters (each cluster is 2+ interviews that overlap transitively). */
   const overlapClustersByDay = useMemo(() => {
     const map = new Map();
-    for (const d of weekDays) {
+    for (const d of visibleDays) {
       const key = d.toISODate();
       const list = byDay.get(key) || [];
       map.set(
@@ -390,40 +422,50 @@ export default function InterviewCalendarPage() {
       );
     }
     return map;
-  }, [byDay, weekDays, calendarTz]);
+  }, [byDay, visibleDays, calendarTz]);
 
   /** ISO date → ordered list of { single interview } or { overlap cluster with wrapper metrics }. */
   const dayRenderPlanByKey = useMemo(() => {
     const out = new Map();
-    for (const d of weekDays) {
+    for (const d of visibleDays) {
       const key = d.toISODate();
       const list = byDay.get(key) || [];
       out.set(key, buildDayRenderPlan(list, d, calendarTz));
     }
     return out;
-  }, [byDay, weekDays, calendarTz]);
+  }, [byDay, visibleDays, calendarTz]);
 
-  const prevWeek = () => {
-    setWeekMondayIso((prev) => {
-      const mon = DateTime.fromISO(`${prev}T00:00:00`, { zone: calendarTz });
-      return mon.minus({ weeks: 1 }).toISODate();
+  const goPrevRange = () => {
+    setViewDateIso((prev) => {
+      const d = DateTime.fromISO(`${prev}T00:00:00`, { zone: calendarTz });
+      if (viewMode === "day") return d.minus({ days: 1 }).toISODate();
+      if (viewMode === "week") {
+        const mon = startOfWeekMondayInZone(d.toJSDate(), calendarTz);
+        return mon.minus({ weeks: 1 }).toISODate();
+      }
+      return d.minus({ months: 1 }).startOf("month").toISODate();
     });
   };
 
-  const nextWeek = () => {
-    setWeekMondayIso((prev) => {
-      const mon = DateTime.fromISO(`${prev}T00:00:00`, { zone: calendarTz });
-      return mon.plus({ weeks: 1 }).toISODate();
+  const goNextRange = () => {
+    setViewDateIso((prev) => {
+      const d = DateTime.fromISO(`${prev}T00:00:00`, { zone: calendarTz });
+      if (viewMode === "day") return d.plus({ days: 1 }).toISODate();
+      if (viewMode === "week") {
+        const mon = startOfWeekMondayInZone(d.toJSDate(), calendarTz);
+        return mon.plus({ weeks: 1 }).toISODate();
+      }
+      return d.plus({ months: 1 }).startOf("month").toISODate();
     });
   };
 
-  const thisWeek = () => {
-    setWeekMondayIso(startOfWeekMondayInZone(new Date(), calendarTz).toISODate());
+  const goToday = () => {
+    setViewDateIso(DateTime.now().setZone(calendarTz).toISODate());
   };
 
   const slotLines = useMemo(() => Array.from({ length: SLOTS_PER_DAY }, (_, i) => i), []);
 
-  const refDayForLabels = weekDays[0] || weekMondayDt;
+  const refDayForLabels = visibleDays[0] || anchorDt;
 
   const openDetails = (ev, e) => {
     e.stopPropagation();
@@ -518,9 +560,8 @@ export default function InterviewCalendarPage() {
         <div>
           <h1>Interview calendar</h1>
           <p>
-            Week grid uses the timezone below (default Pacific). Drag on an empty area to pick a time range (like Google
-            Calendar), then add interview details on the Interviews page. Click a block for details. Manage rows on{" "}
-            <Link to="/interviews">Interviews</Link>.
+            Day, week, and month views (Google Calendar–style). Timezone below. In day/week, drag empty space to pick a
+            time range; click any block for details. Manage rows on <Link to="/interviews">Interviews</Link>.
           </p>
         </div>
         <div className="page-header-actions interview-cal-nav">
@@ -533,15 +574,6 @@ export default function InterviewCalendarPage() {
               ariaLabel="Calendar timezone"
             />
           </label>
-          <button type="button" className="small muted" onClick={prevWeek}>
-            ← Prev week
-          </button>
-          <button type="button" className="small muted" onClick={thisWeek}>
-            This week
-          </button>
-          <button type="button" className="small muted" onClick={nextWeek}>
-            Next week →
-          </button>
         </div>
       </header>
 
@@ -550,8 +582,115 @@ export default function InterviewCalendarPage() {
 
       {!loading && !error && (
         <div className="card interview-cal-gcal-card">
-          <div className="interview-cal-gcal-scroll">
-            <div className="interview-cal-gcal">
+          <div className="interview-cal-toolbar">
+            <div className="interview-cal-toolbar-left">
+              <div className="interview-cal-view-tabs" role="tablist" aria-label="Calendar view">
+                {(
+                  [
+                    { id: "day", label: "Day" },
+                    { id: "week", label: "Week" },
+                    { id: "month", label: "Month" }
+                  ]
+                ).map(({ id, label }) => (
+                  <button
+                    key={id}
+                    type="button"
+                    role="tab"
+                    aria-selected={viewMode === id}
+                    className={`interview-cal-view-tab${viewMode === id ? " interview-cal-view-tab--active" : ""}`}
+                    onClick={() => setViewMode(/** @type {CalViewMode} */ (id))}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <span className="interview-cal-range-title">{rangeTitle}</span>
+            </div>
+            <div className="interview-cal-toolbar-nav">
+              <button type="button" className="small muted" onClick={goPrevRange}>
+                {viewMode === "day" ? "← Prev day" : viewMode === "week" ? "← Prev week" : "← Prev month"}
+              </button>
+              <button type="button" className="small muted" onClick={goToday}>
+                Today
+              </button>
+              <button type="button" className="small muted" onClick={goNextRange}>
+                {viewMode === "day" ? "Next day →" : viewMode === "week" ? "Next week →" : "Next month →"}
+              </button>
+            </div>
+          </div>
+
+          {viewMode === "month" ? (
+            <div className="interview-cal-month-wrap">
+              <div className="interview-cal-month-weekdays" aria-hidden>
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((w) => (
+                  <div key={w} className="interview-cal-month-weekday">
+                    {w}
+                  </div>
+                ))}
+              </div>
+              <div className="interview-cal-month-grid">
+                {visibleDays.map((cell) => {
+                  const iso = cell.toISODate();
+                  const vm = anchorDt.startOf("month");
+                  const isOtherMonth = cell.month !== vm.month || cell.year !== vm.year;
+                  const isTodayCell = iso === todayIsoInViewTz;
+                  const list = (byDay.get(iso) || []).slice().sort((a, b) => {
+                    const ta = new Date(a.scheduledAt).getTime();
+                    const tb = new Date(b.scheduledAt).getTime();
+                    return ta - tb;
+                  });
+                  const maxShow = 3;
+                  const shown = list.slice(0, maxShow);
+                  const more = list.length - shown.length;
+                  return (
+                    <div
+                      key={iso}
+                      className={`interview-cal-month-cell${isOtherMonth ? " interview-cal-month-cell--other-month" : ""}${isTodayCell ? " interview-cal-month-cell--today" : ""}`}
+                    >
+                      <button
+                        type="button"
+                        className="interview-cal-month-daynum"
+                        onClick={() => {
+                          setViewDateIso(iso);
+                          setViewMode("day");
+                        }}
+                      >
+                        {cell.day}
+                      </button>
+                      <div className="interview-cal-month-events">
+                        {shown.map((ev) => {
+                          const col = ownerPalette.colorByKey.get(ownerKey(ev)) || DEFAULT_OWNER_COLOR;
+                          const oid = stableInterviewId(ev);
+                          return (
+                            <button
+                              key={oid}
+                              type="button"
+                              className="interview-cal-month-event"
+                              style={{ borderLeftColor: col.border, background: col.bg1 }}
+                              title={`${ev.subjectName} — ${ev.company}`}
+                              onClick={(e) => openDetails(ev, e)}
+                            >
+                              <span className="interview-cal-month-event-time">
+                                {DateTime.fromJSDate(new Date(ev.scheduledAt), { zone: "utc" })
+                                  .setZone(calendarTz)
+                                  .toFormat("h:mm a")}
+                              </span>
+                              <span className="interview-cal-month-event-title">{ev.subjectName}</span>
+                            </button>
+                          );
+                        })}
+                        {more > 0 ? (
+                          <span className="interview-cal-month-more muted-text">+{more} more</span>
+                        ) : null}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          ) : (
+            <div className="interview-cal-gcal-scroll">
+              <div className="interview-cal-gcal">
               <div className="interview-cal-gcal-header">
                 <div className="interview-cal-gcal-timezone-heads">
                   <div
@@ -568,7 +707,7 @@ export default function InterviewCalendarPage() {
                     <span className="interview-cal-gcal-tz-head-abbr">{viewTzHeadAbbr}</span>
                   </div>
                 </div>
-                {weekDays.map((d) => {
+                {visibleDays.map((d) => {
                   const dayIso = d.toISODate();
                   const isTodayCol = dayIso === todayIsoInViewTz;
                   return (
@@ -634,7 +773,7 @@ export default function InterviewCalendarPage() {
                   })}
                 </div>
 
-                {weekDays.map((d) => {
+                {visibleDays.map((d) => {
                   const key = d.toISODate();
                   const dayStart = d;
                   const list = byDay.get(key) || [];
@@ -821,21 +960,22 @@ export default function InterviewCalendarPage() {
               </div>
             </div>
           </div>
+          )}
           <p className="interview-cal-legend muted-text">
-            The left time column is <strong>{CALENDAR_REFERENCE_TZ_LABEL}</strong> ({CALENDAR_REFERENCE_TZ}); next column
-            matches <strong>{calendarTz}</strong> (Pacific by default). Each horizontal line is 30
-            minutes. Overlapping interviews are grouped in one <strong>row container</strong> with a column per interview
-            (side by side). Drag on empty space to schedule; each row is snapped to 30 minutes. The{" "}
-            <strong className="interview-cal-now-legend">red line</strong> is the current time (when today falls in this
-            week); it updates every 30 seconds. Slot colors match the <strong>interview subject</strong> (teammate);
+            <strong>Day/week:</strong> the left time column is <strong>{CALENDAR_REFERENCE_TZ_LABEL}</strong> (
+            {CALENDAR_REFERENCE_TZ}); next matches <strong>{calendarTz}</strong>. Each row is 30 minutes; drag empty space
+            to schedule. The <strong className="interview-cal-now-legend">red line</strong> is current time when today is
+            visible. <strong>Month:</strong> click a day number to open the day view; click an event for details. Slot
+            colors match the <strong>interview subject</strong> (teammate);
             linked users share one color. A <strong>corner badge</strong> shows the interview type when{" "}
             <strong>Interview type</strong> on the Interviews form matches Phone, Intro, Tech&nbsp;1, Tech&nbsp;2, Final
             (or 0–4), or common phrases like “phone screen” or “technical 2”.
           </p>
-          {weekDays.some((d) => (overlapClustersByDay.get(d.toISODate()) || []).length > 0) && (
+          {viewMode !== "month" &&
+            visibleDays.some((d) => (overlapClustersByDay.get(d.toISODate()) || []).length > 0) && (
             <details className="interview-cal-overlap-debug card">
               <summary className="interview-cal-overlap-debug-summary">
-                Overlapping schedule groups (this week) — same logic as the grid
+                Overlapping schedule groups (current range) — same logic as the time grid
               </summary>
               <div className="interview-cal-overlap-debug-body muted-text">
                 <p className="interview-cal-overlap-debug-intro">
@@ -844,7 +984,7 @@ export default function InterviewCalendarPage() {
                   all three are one group).
                 </p>
                 <ul className="interview-cal-overlap-debug-days">
-                  {weekDays.map((d) => {
+                  {visibleDays.map((d) => {
                     const key = d.toISODate();
                     const clusters = overlapClustersByDay.get(key) || [];
                     if (clusters.length === 0) return null;
@@ -878,7 +1018,7 @@ export default function InterviewCalendarPage() {
             </details>
           )}
           {ownerPalette.orderedKeys.length > 0 && (
-            <div className="interview-cal-owner-legend" aria-label="Subject colors for this week">
+            <div className="interview-cal-owner-legend" aria-label="Subject colors for this view">
               <span className="interview-cal-owner-legend-heading muted-text">Subject colors</span>
               <ul className="interview-cal-owner-legend-list">
                 {ownerPalette.orderedKeys.map((k) => {
