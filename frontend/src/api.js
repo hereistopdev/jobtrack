@@ -128,6 +128,16 @@ export async function uploadProfileOtherDocument(profileId, file, category, labe
   return uploadProfileOtherDocuments(profileId, [file], category, label);
 }
 
+/** GET /auth/job-profile-stats/:profileId — interviews + job board counts for this profile */
+export async function fetchJobProfileStats(profileId) {
+  const res = await fetch(`${API_BASE_URL}/auth/job-profile-stats/${encodeURIComponent(profileId)}`, {
+    headers: { ...authHeaders() }
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.message || `Request failed (${res.status})`);
+  return data;
+}
+
 export async function deleteProfileResumeFile(profileId) {
   const res = await fetch(`${API_BASE_URL}/auth/profile-files/${encodeURIComponent(profileId)}/resume`, {
     method: "DELETE",

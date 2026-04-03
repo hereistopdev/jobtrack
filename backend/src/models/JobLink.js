@@ -36,6 +36,11 @@ const jobLinkSchema = new mongoose.Schema(
       trim: true,
       default: ""
     },
+    /** Optional: which of the creator's job-search profiles this application belongs to (for stats). */
+    jobProfileId: {
+      type: mongoose.Schema.Types.ObjectId,
+      default: null
+    },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",

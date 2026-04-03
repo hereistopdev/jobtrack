@@ -1,6 +1,8 @@
 import express from "express";
+import mongoose from "mongoose";
 import multer from "multer";
 import { JobLink } from "../models/JobLink.js";
+import { User } from "../models/User.js";
 import { parseJobUrl } from "../services/parseJobUrl.js";
 import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 import { canModifyJobLink } from "../utils/jobPermissions.js";
@@ -19,6 +21,29 @@ const upload = multer({
 });
 
 router.use(requireAuth, requireApprovedUser);
+
+async function resolveJobProfileIdForUser(userId, raw) {
+  if (raw === undefined || raw === null || raw === "") return null;
+  const s = String(raw).trim();
+  if (!mongoose.Types.ObjectId.isValid(s)) {
+    const err = new Error("Invalid jobProfileId");
+    err.status = 400;
+    throw err;
+  }
+  const user = await User.findById(userId).select("jobProfiles");
+  if (!user) {
+    const err = new Error("User not found");
+    err.status = 404;
+    throw err;
+  }
+  const ok = (user.jobProfiles || []).some((p) => p._id.toString() === s);
+  if (!ok) {
+    const err = new Error("jobProfileId must be one of your job profiles");
+    err.status = 400;
+    throw err;
+  }
+  return new mongoose.Types.ObjectId(s);
+}
 
 router.post("/parse", async (req, res) => {
   try {
@@ -128,7 +153,15 @@ router.delete("/:id/interviews/:interviewId", async (req, res) => {
 
 router.post("/", async (req, res) => {
   try {
-    const { company, title, link, date, status, notes, country } = req.body || {};
+    const { company, title, link, date, status, notes, country, jobProfileId: jobProfileIdRaw } = req.body || {};
+
+    let jobProfileId = null;
+    try {
+      jobProfileId = await resolveJobProfileIdForUser(req.user.id, jobProfileIdRaw);
+    } catch (e) {
+      const st = e.status || 400;
+      return res.status(st).json({ message: e.message || "Invalid job profile" });
+    }
 
     const dup = await findDuplicateJobLink({
       link,
@@ -147,6 +180,7 @@ router.post("/", async (req, res) => {
       status,
       notes,
       country: typeof country === "string" ? country : "",
+      jobProfileId,
       createdBy: req.user.id
     });
     const populated = await JobLink.findById(newLink._id).populate("createdBy", "email name");
@@ -166,7 +200,21 @@ router.put("/:id", async (req, res) => {
       return res.status(403).json({ message: "You can only edit links you added" });
     }
 
-    const { company, title, link, date, status, notes, country } = req.body || {};
+    const { company, title, link, date, status, notes, country, jobProfileId: jobProfileIdRaw } = req.body || {};
+
+    let jobProfileIdUpdate = undefined;
+    if (jobProfileIdRaw !== undefined) {
+      if (jobProfileIdRaw === null || jobProfileIdRaw === "") {
+        jobProfileIdUpdate = null;
+      } else {
+        try {
+          jobProfileIdUpdate = await resolveJobProfileIdForUser(req.user.id, jobProfileIdRaw);
+        } catch (e) {
+          const st = e.status || 400;
+          return res.status(st).json({ message: e.message || "Invalid job profile" });
+        }
+      }
+    }
 
     const nextLink = link !== undefined ? link : job.link;
     const nextCompany = company !== undefined ? company : job.company;
@@ -179,11 +227,15 @@ router.put("/:id", async (req, res) => {
       return res.status(409).json(formatDuplicateResponse(dup));
     }
 
-    const updated = await JobLink.findByIdAndUpdate(
-      req.params.id,
-      { company, title, link, date, status, notes, country: typeof country === "string" ? country : "" },
-      { new: true, runValidators: true }
-    ).populate("createdBy", "email name");
+    const patch = { company, title, link, date, status, notes, country: typeof country === "string" ? country : "" };
+    if (jobProfileIdUpdate !== undefined) {
+      patch.jobProfileId = jobProfileIdUpdate;
+    }
+
+    const updated = await JobLink.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true }).populate(
+      "createdBy",
+      "email name"
+    );
 
     res.json(updated);
   } catch (error) {

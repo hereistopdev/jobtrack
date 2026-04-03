@@ -73,6 +73,12 @@ const jobProfileSchema = new mongoose.Schema(
     summary: { type: String, trim: true, default: "", maxlength: 4000 },
     overview: { type: String, trim: true, default: "", maxlength: 16000 },
     fullName: { type: String, trim: true, default: "", maxlength: 200 },
+    /** Optional; not validated as real date — display / forms only */
+    dateOfBirth: { type: String, trim: true, default: "", maxlength: 40 },
+    /** Contact email for applications (may differ from account email). */
+    profileEmail: { type: String, trim: true, default: "", maxlength: 200 },
+    linkedinUrl: { type: String, trim: true, default: "", maxlength: 500 },
+    portfolioUrl: { type: String, trim: true, default: "", maxlength: 2000 },
     addressLine: { type: String, trim: true, default: "", maxlength: 500 },
     country: { type: String, trim: true, default: "", maxlength: 120 },
     /** SSN / EIN / tax id — store only on trusted deployments */
@@ -81,6 +87,8 @@ const jobProfileSchema = new mongoose.Schema(
     resumeText: { type: String, default: "", maxlength: 50000 },
     /** Link to resume file or portfolio (optional). */
     resumeUrl: { type: String, trim: true, default: "", maxlength: 2000 },
+    /** Heuristic ATS-style score (0–100), set on resume upload; editable via profile patch. */
+    resumeAtsScore: { type: Number, default: null, min: 0, max: 100 },
     /** Comma- or line-separated stack / keywords. */
     technologies: { type: String, trim: true, default: "", maxlength: 4000 },
     experiences: {

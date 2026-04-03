@@ -13,6 +13,7 @@ import teamAccountsRouter from "./routes/teamAccounts.js";
 import totpEntriesRouter from "./routes/totpEntries.js";
 import userDirectoryRouter from "./routes/userDirectory.js";
 import profileDocumentsRouter from "./routes/profileDocuments.js";
+import jobProfileStatsRouter from "./routes/jobProfileStats.js";
 
 const app = express();
 
@@ -32,8 +33,10 @@ app.get("/api/health", (_req, res) => {
   res.json({ ok: true, message: "API is running" });
 });
 
-app.use("/api/auth", authRouter);
+// Must be before /api/auth: that mount would otherwise consume /api/auth/* subpaths and never reach these routers.
 app.use("/api/auth/profile-files", profileDocumentsRouter);
+app.use("/api/auth/job-profile-stats", jobProfileStatsRouter);
+app.use("/api/auth", authRouter);
 app.use("/api/users", userDirectoryRouter);
 app.use("/api/job-links", jobLinksRouter);
 app.use("/api/admin/users", adminUsersRouter);

@@ -178,11 +178,16 @@ export function mapJobProfileToClient(p, index) {
     summary: p.summary || "",
     overview,
     fullName: p.fullName || "",
+    dateOfBirth: p.dateOfBirth || "",
+    profileEmail: p.profileEmail || "",
+    linkedinUrl: p.linkedinUrl || "",
+    portfolioUrl: p.portfolioUrl || "",
     addressLine: p.addressLine || "",
     country: p.country || "",
     taxId: p.taxId || "",
     resumeText: p.resumeText || "",
     resumeUrl: p.resumeUrl || "",
+    resumeAtsScore: p.resumeAtsScore != null ? p.resumeAtsScore : null,
     technologies: p.technologies || "",
     experiences: Array.isArray(p.experiences) ? p.experiences : [],
     universities: Array.isArray(p.universities) ? p.universities : [],
@@ -246,15 +251,28 @@ export function applyIncomingJobProfiles(user, incoming) {
     } else {
       overviewStr = raw.summary != null ? String(raw.summary) : "";
     }
+    let ats = prev?.resumeAtsScore ?? null;
+    if (raw.resumeAtsScore !== undefined && raw.resumeAtsScore !== null && raw.resumeAtsScore !== "") {
+      const n = Number(raw.resumeAtsScore);
+      if (Number.isFinite(n)) {
+        ats = Math.max(0, Math.min(100, Math.round(n)));
+      }
+    }
+
     const extra = {
       summary: trimField(raw.summary, 4000),
       overview: trimField(overviewStr, 16000),
       fullName: trimField(raw.fullName, 200),
+      dateOfBirth: trimField(raw.dateOfBirth, 40),
+      profileEmail: trimField(raw.profileEmail, 200),
+      linkedinUrl: trimField(raw.linkedinUrl, 500),
+      portfolioUrl: trimField(raw.portfolioUrl, 2000),
       addressLine: trimField(raw.addressLine, 500),
       country: trimField(raw.country, 120),
       taxId: trimField(raw.taxId, 32),
       resumeText: trimField(raw.resumeText, 50000),
       resumeUrl: trimField(raw.resumeUrl, 2000),
+      resumeAtsScore: ats,
       technologies: trimField(raw.technologies, 4000),
       experiences: sanitizeExperiences(raw.experiences),
       universities: sanitizeUniversities(raw.universities),

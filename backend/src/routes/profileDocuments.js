@@ -6,6 +6,7 @@ import { User } from "../models/User.js";
 import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 import { mapJobProfileToClient, migrateJobProfilesIfNeeded, sanitizeExperiences, sanitizeUniversities } from "../utils/jobProfiles.js";
 import { parseResumeStructured } from "../utils/parseResumeStructured.js";
+import { computeResumeAtsScore } from "../utils/resumeAtsScore.js";
 import { extractResumeText } from "../utils/resumeTextFromBuffer.js";
 import {
   absolutePathForKey,
@@ -28,7 +29,18 @@ const uploadMulti = multer({
 
 const RESUME_MIME = /^(application\/pdf|application\/vnd\.openxmlformats-officedocument\.wordprocessingml\.document|text\/plain)$/i;
 const IMAGE_OR_PDF_MIME =
-  /^(image\/jpeg|image\/png|image\/webp|application\/pdf)$/i;
+  /^(image\/jpe?g|image\/png|image\/webp|image\/gif|image\/heic|image\/heif|application\/pdf)$/i;
+
+const IMAGE_OR_PDF_EXT = /\.(jpe?g|png|webp|gif|heic|heif|pdf)$/i;
+
+function isAllowedImageOrPdf(file) {
+  const mime = String(file.mimetype || "").toLowerCase();
+  if (IMAGE_OR_PDF_MIME.test(mime)) return true;
+  const name = file.originalname || "";
+  if (IMAGE_OR_PDF_EXT.test(name)) return true;
+  if (mime === "application/octet-stream" && IMAGE_OR_PDF_EXT.test(name)) return true;
+  return false;
+}
 
 const ID_KINDS = new Set(["drivers_license", "passport", "green_card", "state_id", "other"]);
 const OTHER_CATS = new Set(["diploma", "transcript", "paystub", "certificate", "other"]);
@@ -39,6 +51,11 @@ function handleMulter(err, _req, res, next) {
   if (!err) return next();
   if (err.code === "LIMIT_FILE_SIZE") {
     return res.status(400).json({ message: "File too large (max 15 MB)" });
+  }
+  if (err.code === "LIMIT_UNEXPECTED_FILE") {
+    return res.status(400).json({
+      message: `Unexpected file field "${err.field || ""}". Use field name "files" (or "file" for a single upload).`
+    });
   }
   return next(err);
 }
@@ -110,6 +127,8 @@ router.post(
         jp.universities = uni;
       }
 
+      jp.resumeAtsScore = computeResumeAtsScore(extracted);
+
       user.markModified("jobProfiles");
       await user.save();
 
@@ -161,7 +180,7 @@ router.post(
           skipped += fileList.length - uploaded;
           break;
         }
-        if (!IMAGE_OR_PDF_MIME.test(file.mimetype || "")) {
+        if (!isAllowedImageOrPdf(file)) {
           skipped++;
           continue;
         }
@@ -231,7 +250,7 @@ router.post(
           skipped += fileList.length - uploaded;
           break;
         }
-        if (!IMAGE_OR_PDF_MIME.test(file.mimetype || "")) {
+        if (!isAllowedImageOrPdf(file)) {
           skipped++;
           continue;
         }
