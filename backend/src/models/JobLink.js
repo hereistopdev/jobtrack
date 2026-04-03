@@ -56,6 +56,12 @@ const jobLinkSchema = new mongoose.Schema(
         scheduledAt: {
           type: Date,
           required: true
+        },
+        /** Optional link to a row in the team interview log / calendar. */
+        linkedInterviewRecordId: {
+          type: mongoose.Schema.Types.ObjectId,
+          ref: "InterviewRecord",
+          default: null
         }
       }
     ]

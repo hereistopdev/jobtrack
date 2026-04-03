@@ -25,6 +25,10 @@ const interviewRecordSchema = new mongoose.Schema(
     resultStatus: { type: String, trim: true, default: "" },
     notes: { type: String, trim: true, default: "" },
     jobLinkUrl: { type: String, trim: true, default: "" },
+    /** Team job board row this log entry is tied to (when linked from Jobs). */
+    jobLinkId: { type: mongoose.Schema.Types.ObjectId, ref: "JobLink", default: null },
+    /** True when this row was created from the Jobs board (not imported / not an existing log row). */
+    createdFromJobBoard: { type: Boolean, default: false },
     interviewerName: { type: String, trim: true, default: "" },
     contactInfo: { type: String, trim: true, default: "" },
     sourceSheet: { type: String, trim: true, default: "" },

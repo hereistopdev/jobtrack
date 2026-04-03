@@ -416,6 +416,25 @@ router.get("/", async (_req, res) => {
   }
 });
 
+router.get("/:id", async (req, res) => {
+  try {
+    const id = String(req.params.id || "").trim();
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ message: "Invalid id" });
+    }
+    const doc = await InterviewRecord.findById(id)
+      .populate("createdBy", "email name")
+      .populate("subjectUserId", "email name")
+      .lean();
+    if (!doc) {
+      return res.status(404).json({ message: "Not found" });
+    }
+    res.json(doc);
+  } catch (error) {
+    res.status(500).json({ message: "Failed to load interview", error: error.message });
+  }
+});
+
 router.post("/", async (req, res) => {
   try {
     const b = req.body || {};

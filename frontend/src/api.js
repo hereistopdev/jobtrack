@@ -451,6 +451,14 @@ export async function fetchInterviewRecords() {
   return res.json();
 }
 
+export async function fetchInterviewRecord(id) {
+  const res = await fetch(`${API_BASE_URL}/interviews/${encodeURIComponent(id)}`, {
+    headers: { ...authHeaders() }
+  });
+  if (!res.ok) throw new Error(await parseJsonError(res));
+  return res.json();
+}
+
 export async function fetchInterviewCalendar(fromIso, toIso) {
   const q = new URLSearchParams({ from: fromIso, to: toIso });
   const res = await fetch(`${API_BASE_URL}/interviews/calendar?${q}`, { headers: { ...authHeaders() } });

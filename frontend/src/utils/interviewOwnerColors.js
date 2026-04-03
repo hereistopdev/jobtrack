@@ -1,6 +1,7 @@
 /**
- * Calendar block colors: prefer per–job-profile hex from API (`profileColorHex`),
- * else fall back to a palette keyed by subject (owner).
+ * Calendar block colors:
+ * - **User palette** (`buildUserColorPalette`): one fixed gradient per interview subject user (stable hash).
+ * - **Legacy** (`buildOwnerPaletteMaps` / old `eventCalendarStyle`): profile-hex or per–legend-key palette.
  */
 
 /** Distinct, readable gradients (border + title text tuned for contrast). */
@@ -77,6 +78,62 @@ export function ownerKey(ev) {
   return `name:${name || "unknown"}`;
 }
 
+/**
+ * Stable key for **one color per teammate** on the calendar (interview subject).
+ * Uses linked subject user when present; otherwise falls back to creator, then name.
+ */
+export function calendarUserColorKey(ev) {
+  const su = ev.subjectUserId;
+  if (su != null && su !== "") {
+    const id = typeof su === "object" && su._id != null ? su._id : su;
+    return `user:${String(id)}`;
+  }
+  const cb = ev.createdBy;
+  if (cb != null && cb !== "") {
+    const id = typeof cb === "object" && cb._id != null ? cb._id : cb;
+    return `creator:${String(id)}`;
+  }
+  const name = (ev.subjectName || "").trim().toLowerCase();
+  return `name:${name || "unknown"}`;
+}
+
+function stableHashString(str) {
+  let h = 2166136261;
+  const s = String(str);
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return Math.abs(h | 0);
+}
+
+/**
+ * One fixed palette entry per distinct subject user in `rows` (order-stable, hash-based color).
+ * @returns {{ colorByUserKey: Map<string, typeof DEFAULT_OWNER_COLOR>, orderedUserKeys: string[] }}
+ */
+export function buildUserColorPalette(rows) {
+  if (!rows?.length) {
+    return { colorByUserKey: new Map(), orderedUserKeys: [] };
+  }
+  const seen = new Set();
+  const orderedUserKeys = [];
+  for (const ev of rows) {
+    const k = calendarUserColorKey(ev);
+    if (!seen.has(k)) {
+      seen.add(k);
+      orderedUserKeys.push(k);
+    }
+  }
+  orderedUserKeys.sort((a, b) => a.localeCompare(b));
+
+  const colorByUserKey = new Map();
+  for (const k of orderedUserKeys) {
+    const idx = stableHashString(k) % PALETTE.length;
+    colorByUserKey.set(k, PALETTE[idx]);
+  }
+  return { colorByUserKey, orderedUserKeys };
+}
+
 /** Stable key for legend + palette: subject + profile when linked, else owner-only. */
 export function calendarLegendKey(ev) {
   const hex = typeof ev.profileColorHex === "string" ? ev.profileColorHex.trim().toLowerCase() : "";
@@ -143,12 +200,20 @@ export function buildOwnerPaletteMaps(rows) {
   return { colorByKey, labelByKey, orderedKeys };
 }
 
-export function eventCalendarStyle(ev, ownerPalette) {
+/**
+ * @param ev - interview row
+ * @param palette - from `buildUserColorPalette` (has `colorByUserKey`) or legacy `buildOwnerPaletteMaps` (has `colorByKey`)
+ */
+export function eventCalendarStyle(ev, palette) {
+  if (palette?.colorByUserKey) {
+    const k = calendarUserColorKey(ev);
+    return palette.colorByUserKey.get(k) || DEFAULT_OWNER_COLOR;
+  }
   const hex = typeof ev.profileColorHex === "string" ? ev.profileColorHex.trim() : "";
   if (/^#[0-9a-f]{6}$/i.test(hex)) {
     return hexToCalendarStyle(hex);
   }
-  return ownerPalette.colorByKey.get(calendarLegendKey(ev)) || DEFAULT_OWNER_COLOR;
+  return palette.colorByKey.get(calendarLegendKey(ev)) || DEFAULT_OWNER_COLOR;
 }
 
 function labelForSort(rows, key) {

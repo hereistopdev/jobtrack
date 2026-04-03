@@ -1,11 +1,12 @@
 import { DateTime } from "luxon";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { fetchInterviewCalendar } from "../api";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { fetchInterviewCalendar, fetchInterviewRecord } from "../api";
 import TimeZoneCombobox from "../components/TimeZoneCombobox";
 import { getInterviewStageBadge } from "../utils/interviewStage";
 import { effectiveEndMs, rangesOverlap } from "../utils/interviewTime";
-import { buildOwnerPaletteMaps, eventCalendarStyle } from "../utils/interviewOwnerColors";
+import { buildProfileFilterOptions, profileVisibilityKey } from "../utils/interviewCalendarProfileFilter";
+import { buildUserColorPalette, eventCalendarStyle } from "../utils/interviewOwnerColors";
 import {
   CALENDAR_DEFAULT_TZ,
   formatTimeZoneOptionLabel,
@@ -225,8 +226,24 @@ function formatRangeInZone(ev, zone) {
 
 /** @typedef {"day" | "week" | "month"} CalViewMode */
 
+const PROFILE_VISIBILITY_STORAGE_KEY = "jobtrack.interviewCal.profileVisibility";
+
+function loadProfileVisibilityFromStorage() {
+  try {
+    const raw = localStorage.getItem(PROFILE_VISIBILITY_STORAGE_KEY);
+    if (raw) {
+      const p = JSON.parse(raw);
+      if (p && typeof p === "object" && !Array.isArray(p)) return p;
+    }
+  } catch {
+    /* ignore */
+  }
+  return {};
+}
+
 export default function InterviewCalendarPage() {
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const [calendarTz, setCalendarTz] = useState(CALENDAR_DEFAULT_TZ);
   /** Anchor date (YYYY-MM-DD in `calendarTz`) for whichever view is active. */
   const [viewDateIso, setViewDateIso] = useState(() =>
@@ -242,6 +259,9 @@ export default function InterviewCalendarPage() {
   const dragStartRef = useRef(null);
   /** Recomputed on interval so the “now” line moves. */
   const [nowTick, setNowTick] = useState(0);
+
+  /** Per–profile checkbox visibility (includes teammates’ profiles). */
+  const [profileVisibility, setProfileVisibility] = useState(loadProfileVisibilityFromStorage);
 
   const timeZoneIds = useMemo(() => getSortedTimeZones(), []);
   const timeZoneSelectOptions = useMemo(
@@ -320,6 +340,37 @@ export default function InterviewCalendarPage() {
     load();
   }, [load]);
 
+  /** Deep link: /interviews/calendar?event=<interviewId> — scroll to week/day and open details. */
+  useEffect(() => {
+    const eventId = searchParams.get("event");
+    if (!eventId) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const doc = await fetchInterviewRecord(eventId);
+        if (cancelled || !doc?.scheduledAt) return;
+        const d = DateTime.fromJSDate(new Date(doc.scheduledAt), { zone: "utc" }).setZone(calendarTz);
+        if (d.isValid) setViewDateIso(d.toISODate());
+      } catch {
+        /* invalid id or network */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [searchParams, calendarTz]);
+
+  useEffect(() => {
+    const eventId = searchParams.get("event");
+    if (!eventId || loading) return;
+    const ev = rows.find((r) => stableInterviewId(r) === eventId);
+    if (!ev) return;
+    setSelectedEv(ev);
+    const next = new URLSearchParams(searchParams);
+    next.delete("event");
+    setSearchParams(next, { replace: true });
+  }, [searchParams, rows, loading, setSearchParams]);
+
   useEffect(() => {
     const id = window.setInterval(() => setNowTick((t) => t + 1), 30_000);
     return () => window.clearInterval(id);
@@ -363,7 +414,31 @@ export default function InterviewCalendarPage() {
     [calendarTz, nowTick]
   );
 
-  const ownerPalette = useMemo(() => buildOwnerPaletteMaps(rows), [rows]);
+  const profileFilterOptions = useMemo(() => buildProfileFilterOptions(rows), [rows]);
+
+  useEffect(() => {
+    setProfileVisibility((prev) => {
+      const next = { ...prev };
+      for (const opt of profileFilterOptions) {
+        if (next[opt.key] === undefined) next[opt.key] = true;
+      }
+      return next;
+    });
+  }, [profileFilterOptions]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PROFILE_VISIBILITY_STORAGE_KEY, JSON.stringify(profileVisibility));
+    } catch {
+      /* ignore */
+    }
+  }, [profileVisibility]);
+
+  const filteredRows = useMemo(() => {
+    return rows.filter((ev) => profileVisibility[profileVisibilityKey(ev)] !== false);
+  }, [rows, profileVisibility]);
+
+  const userColorPalette = useMemo(() => buildUserColorPalette(rows), [rows]);
 
   const byDay = useMemo(() => {
     const map = new Map();
@@ -371,7 +446,7 @@ export default function InterviewCalendarPage() {
       const key = d.toISODate();
       map.set(key, []);
     }
-    for (const ev of rows) {
+    for (const ev of filteredRows) {
       for (const d of visibleDays) {
         const dayStart = d;
         if (eventOverlapsDay(ev, dayStart, calendarTz)) {
@@ -380,7 +455,7 @@ export default function InterviewCalendarPage() {
       }
     }
     return map;
-  }, [rows, visibleDays, calendarTz]);
+  }, [filteredRows, visibleDays, calendarTz]);
 
   /**
    * Per calendar column: ids that overlap someone else **on that same day** (same rules as clusters).
@@ -551,8 +626,18 @@ export default function InterviewCalendarPage() {
   }, [selectedEv]);
 
   const modalOwnerColor = selectedEv
-    ? eventCalendarStyle(selectedEv, ownerPalette)
+    ? eventCalendarStyle(selectedEv, userColorPalette)
     : null;
+
+  const setAllProfileVisibility = (value) => {
+    setProfileVisibility((prev) => {
+      const next = { ...prev };
+      for (const opt of profileFilterOptions) {
+        next[opt.key] = value;
+      }
+      return next;
+    });
+  };
 
   return (
     <main className="container container-dashboard interview-calendar-page">
@@ -619,6 +704,46 @@ export default function InterviewCalendarPage() {
             </div>
           </div>
 
+          {profileFilterOptions.length > 0 && (
+            <div className="interview-cal-profile-filters" aria-label="Show or hide interviews by job profile">
+              <div className="interview-cal-profile-filters-head">
+                <span className="interview-cal-profile-filters-title">Visible profiles</span>
+                <span className="interview-cal-profile-filters-hint muted-text">
+                  Uncheck to hide a profile (yours or teammates’). Slot colors are fixed per person.
+                </span>
+                <div className="interview-cal-profile-filters-bulk">
+                  <button type="button" className="small muted" onClick={() => setAllProfileVisibility(true)}>
+                    Show all
+                  </button>
+                  <button type="button" className="small muted" onClick={() => setAllProfileVisibility(false)}>
+                    Hide all
+                  </button>
+                </div>
+              </div>
+              <ul className="interview-cal-profile-filters-list">
+                {profileFilterOptions.map((opt) => (
+                  <li key={opt.key}>
+                    <label className="interview-cal-profile-filter-label">
+                      <input
+                        type="checkbox"
+                        checked={profileVisibility[opt.key] !== false}
+                        onChange={(e) =>
+                          setProfileVisibility((p) => ({ ...p, [opt.key]: e.target.checked }))
+                        }
+                      />
+                      <span
+                        className="interview-cal-profile-filter-swatch"
+                        style={{ background: opt.swatchHex }}
+                        aria-hidden
+                      />
+                      <span className="interview-cal-profile-filter-text">{opt.label}</span>
+                    </label>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
           {viewMode === "month" ? (
             <div className="interview-cal-month-wrap">
               <div className="interview-cal-month-weekdays" aria-hidden>
@@ -659,7 +784,7 @@ export default function InterviewCalendarPage() {
                       </button>
                       <div className="interview-cal-month-events">
                         {shown.map((ev) => {
-                          const col = eventCalendarStyle(ev, ownerPalette);
+                          const col = eventCalendarStyle(ev, userColorPalette);
                           const oid = stableInterviewId(ev);
                           return (
                             <button
@@ -825,7 +950,7 @@ export default function InterviewCalendarPage() {
                               const st = eventBlockStyle(clip);
                               const oid = stableInterviewId(ev);
                               const bad = overlapIdsByDay.get(key)?.has(oid) ?? false;
-                              const col = eventCalendarStyle(ev, ownerPalette);
+                              const col = eventCalendarStyle(ev, userColorPalette);
                               const hasStage = Boolean(getInterviewStageBadge(ev.interviewType));
                               return (
                                 <div
@@ -889,7 +1014,7 @@ export default function InterviewCalendarPage() {
                                   if (!clip) return null;
                                   const st = eventBlockStyle(clip);
                                   const oid = stableInterviewId(ev);
-                                  const col = eventCalendarStyle(ev, ownerPalette);
+                                  const col = eventCalendarStyle(ev, userColorPalette);
                                   const offsetTop = st.top - item.wrapperTop;
                                   const hasStage = Boolean(getInterviewStageBadge(ev.interviewType));
                                   return (
@@ -965,11 +1090,10 @@ export default function InterviewCalendarPage() {
             <strong>Day/week:</strong> the left time column is <strong>{CALENDAR_REFERENCE_TZ_LABEL}</strong> (
             {CALENDAR_REFERENCE_TZ}); next matches <strong>{calendarTz}</strong>. Each row is 30 minutes; drag empty space
             to schedule. The <strong className="interview-cal-now-legend">red line</strong> is current time when today is
-            visible. <strong>Month:</strong> click a day number to open the day view; click an event for details. Slot
-            colors match the <strong>interview subject</strong> (teammate);
-            linked users share one color. A <strong>corner badge</strong> shows the interview type when{" "}
-            <strong>Interview type</strong> on the Interviews form matches Phone, Intro, Tech&nbsp;1, Tech&nbsp;2, Final
-            (or 0–4), or common phrases like “phone screen” or “technical 2”.
+            visible. <strong>Month:</strong> click a day number to open the day view; click an event for details.{" "}
+            <strong>Slot colors</strong> are fixed per teammate (interview subject). Use <strong>Visible profiles</strong>{" "}
+            above to show or hide rows by job profile. A <strong>corner badge</strong> shows the interview type when it
+            matches Phone, Intro, Tech, Final, round numbers, etc.
           </p>
           {viewMode !== "month" &&
             visibleDays.some((d) => (overlapClustersByDay.get(d.toISODate()) || []).length > 0) && (
@@ -1016,28 +1140,6 @@ export default function InterviewCalendarPage() {
                 </ul>
               </div>
             </details>
-          )}
-          {ownerPalette.orderedKeys.length > 0 && (
-            <div className="interview-cal-owner-legend" aria-label="Subject colors for this view">
-              <span className="interview-cal-owner-legend-heading muted-text">Subject colors</span>
-              <ul className="interview-cal-owner-legend-list">
-                {ownerPalette.orderedKeys.map((k) => {
-                  const col = ownerPalette.colorByKey.get(k);
-                  const label = ownerPalette.labelByKey.get(k);
-                  if (!col) return null;
-                  return (
-                    <li key={k}>
-                      <span
-                        className="interview-cal-owner-swatch"
-                        style={{ background: col.bg2, borderColor: col.border }}
-                        aria-hidden
-                      />
-                      <span>{label}</span>
-                    </li>
-                  );
-                })}
-              </ul>
-            </div>
           )}
         </div>
       )}

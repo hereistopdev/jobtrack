@@ -72,7 +72,7 @@ function JobTable({
                   <SortTh id="country" label="Country" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-country" />
                   <SortTh id="link" label="Link" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-link" />
                   <SortTh id="date" label="Date" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-date" />
-                  <SortTh id="status" label="Status" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-status" />
+                  <SortTh id="profile" label="Profile" sortKey={sortKey} sortDir={sortDir} onSort={onSort} className="th-profile" />
                   <SortTh
                     id="interviews"
                     label="Interviews"
@@ -101,8 +101,8 @@ function JobTable({
                   <th className="th-date" scope="col">
                     Date
                   </th>
-                  <th className="th-status" scope="col">
-                    Status
+                  <th className="th-profile" scope="col">
+                    Profile
                   </th>
                   <th className="th-interviews" scope="col">
                     Interviews
@@ -145,7 +145,9 @@ function JobTable({
                     </a>
                   </td>
                   <td className="cell-date">{new Date(item.date).toLocaleDateString()}</td>
-                  <td className="cell-status">{item.status}</td>
+                  <td className="cell-profile" title={item.jobProfileLabel || ""}>
+                    {item.jobProfileLabel || "—"}
+                  </td>
                   <td className="cell-interviews">
                     <InterviewScheduleCell
                       item={item}

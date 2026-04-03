@@ -3,11 +3,13 @@ import mongoose from "mongoose";
 import multer from "multer";
 import { JobLink } from "../models/JobLink.js";
 import { User } from "../models/User.js";
+import { InterviewRecord } from "../models/InterviewRecord.js";
 import { parseJobUrl } from "../services/parseJobUrl.js";
 import { requireAuth, requireApprovedUser } from "../middleware/auth.js";
 import { canModifyJobLink } from "../utils/jobPermissions.js";
 import { findDuplicateJobLink, formatDuplicateResponse } from "../utils/duplicateJobLink.js";
 import { importJobLinksFromExcelBuffer } from "../utils/excelJobImport.js";
+import { findOverlappingInterviews, resolveScheduledEnd } from "../utils/interviewTimeRange.js";
 
 const router = express.Router();
 
@@ -45,6 +47,21 @@ async function resolveJobProfileIdForUser(userId, raw) {
   return new mongoose.Types.ObjectId(s);
 }
 
+async function attachJobProfileLabel(doc) {
+  const plain = doc?.toObject ? doc.toObject() : { ...doc };
+  if (!plain.jobProfileId) {
+    return { ...plain, jobProfileLabel: "" };
+  }
+  const uid = plain.createdBy?._id ? String(plain.createdBy._id) : String(plain.createdBy || "");
+  if (!uid) {
+    return { ...plain, jobProfileLabel: "" };
+  }
+  const u = await User.findById(uid).select("jobProfiles").lean();
+  const pid = String(plain.jobProfileId);
+  const jobProfileLabel = (u?.jobProfiles || []).find((p) => String(p._id) === pid)?.label || "";
+  return { ...plain, jobProfileLabel };
+}
+
 router.post("/parse", async (req, res) => {
   try {
     const { url } = req.body || {};
@@ -63,8 +80,41 @@ router.get("/", async (_req, res) => {
   try {
     const links = await JobLink.find()
       .populate("createdBy", "email name")
-      .sort({ date: -1, createdAt: -1 });
-    res.json(links);
+      .populate({
+        path: "interviews.linkedInterviewRecordId",
+        select: "subjectName company roleTitle scheduledAt jobLinkUrl jobLinkId"
+      })
+      .sort({ date: -1, createdAt: -1 })
+      .lean();
+
+    const creatorIds = [
+      ...new Set(
+        links
+          .map((l) => (l.createdBy && l.createdBy._id ? String(l.createdBy._id) : ""))
+          .filter(Boolean)
+      )
+    ];
+    const users = await User.find({ _id: { $in: creatorIds } })
+      .select("jobProfiles")
+      .lean();
+
+    const labelByCreatorAndProfile = new Map();
+    for (const u of users) {
+      const m = new Map((u.jobProfiles || []).map((p) => [String(p._id), p.label || ""]));
+      labelByCreatorAndProfile.set(String(u._id), m);
+    }
+
+    const enriched = links.map((l) => {
+      const uid = l.createdBy && l.createdBy._id ? String(l.createdBy._id) : "";
+      const pid = l.jobProfileId ? String(l.jobProfileId) : "";
+      let jobProfileLabel = "";
+      if (uid && pid && labelByCreatorAndProfile.has(uid)) {
+        jobProfileLabel = labelByCreatorAndProfile.get(uid).get(pid) || "";
+      }
+      return { ...l, jobProfileLabel };
+    });
+
+    res.json(enriched);
   } catch (error) {
     res.status(500).json({ message: "Failed to fetch job links" });
   }
@@ -105,24 +155,87 @@ router.post("/:id/interviews", async (req, res) => {
       return res.status(403).json({ message: "You can only edit links you added" });
     }
 
-    const { label, scheduledAt } = req.body || {};
-    if (!scheduledAt) {
-      return res.status(400).json({ message: "scheduledAt is required" });
-    }
+    const { label, scheduledAt: schedRaw, linkedInterviewRecordId: linkRaw } = req.body || {};
+    let at;
+    let linkedId = null;
 
-    const at = new Date(scheduledAt);
-    if (Number.isNaN(at.getTime())) {
-      return res.status(400).json({ message: "Invalid scheduledAt" });
+    if (linkRaw != null && String(linkRaw).trim() !== "") {
+      const lid = String(linkRaw).trim();
+      if (!mongoose.Types.ObjectId.isValid(lid)) {
+        return res.status(400).json({ message: "Invalid linkedInterviewRecordId" });
+      }
+      const rec = await InterviewRecord.findById(lid).lean();
+      if (!rec) {
+        return res.status(404).json({ message: "Interview record not found" });
+      }
+      linkedId = new mongoose.Types.ObjectId(lid);
+      at = schedRaw ? new Date(schedRaw) : new Date(rec.scheduledAt);
+      if (Number.isNaN(at.getTime())) {
+        return res.status(400).json({ message: "Invalid scheduledAt" });
+      }
+      await InterviewRecord.findByIdAndUpdate(lid, {
+        $set: {
+          jobLinkUrl: job.link,
+          jobLinkId: job._id
+        }
+      });
+    } else {
+      if (schedRaw == null || schedRaw === "") {
+        return res.status(400).json({ message: "scheduledAt is required" });
+      }
+      at = new Date(schedRaw);
+      if (Number.isNaN(at.getTime())) {
+        return res.status(400).json({ message: "Invalid scheduledAt" });
+      }
+      const scheduledEnd = resolveScheduledEnd(at, null);
+      if (!scheduledEnd || Number.isNaN(scheduledEnd.getTime())) {
+        return res.status(400).json({ message: "Could not resolve interview end time" });
+      }
+      const overlaps = await findOverlappingInterviews(at, scheduledEnd, null);
+      if (overlaps.length) {
+        return res.status(409).json({
+          message: "That time overlaps another interview in the team log. Pick a different slot or link an existing row.",
+          conflicts: overlaps.map((o) => ({
+            _id: o._id,
+            company: o.company,
+            roleTitle: o.roleTitle,
+            scheduledAt: o.scheduledAt
+          }))
+        });
+      }
+      const creatorUser = await User.findById(req.user.id).select("name email").lean();
+      const subjectName = String(creatorUser?.name || creatorUser?.email || "Team").trim() || "Team";
+      const roundLabel = typeof label === "string" && label.trim() ? label.trim() : "";
+      const newRec = await InterviewRecord.create({
+        subjectName,
+        company: job.company,
+        roleTitle: job.title,
+        profile: "",
+        scheduledAt: at,
+        scheduledEndAt: scheduledEnd,
+        jobLinkUrl: job.link,
+        jobLinkId: job._id,
+        interviewType: roundLabel,
+        createdFromJobBoard: true,
+        createdBy: req.user.id
+      });
+      linkedId = newRec._id;
     }
 
     job.interviews.push({
       label: typeof label === "string" && label.trim() ? label.trim() : "Interview",
-      scheduledAt: at
+      scheduledAt: at,
+      linkedInterviewRecordId: linkedId
     });
     await job.save();
 
-    const populated = await JobLink.findById(job._id).populate("createdBy", "email name");
-    res.status(201).json(populated);
+    const populated = await JobLink.findById(job._id)
+      .populate("createdBy", "email name")
+      .populate({
+        path: "interviews.linkedInterviewRecordId",
+        select: "subjectName company roleTitle scheduledAt jobLinkUrl jobLinkId"
+      });
+    res.status(201).json(await attachJobProfileLabel(populated));
   } catch (error) {
     res.status(400).json({ message: "Failed to add interview", error: error.message });
   }
@@ -138,14 +251,35 @@ router.delete("/:id/interviews/:interviewId", async (req, res) => {
       return res.status(403).json({ message: "You can only edit links you added" });
     }
 
-    if (!job.interviews.id(req.params.interviewId)) {
+    const sub = job.interviews.id(req.params.interviewId);
+    if (!sub) {
       return res.status(404).json({ message: "Interview not found" });
     }
+    const linkedRef = sub.linkedInterviewRecordId;
     job.interviews.pull(req.params.interviewId);
     await job.save();
 
-    const populated = await JobLink.findById(job._id).populate("createdBy", "email name");
-    res.json(populated);
+    if (linkedRef) {
+      const rec = await InterviewRecord.findById(linkedRef).lean();
+      if (rec && rec.jobLinkId && String(rec.jobLinkId) === String(job._id)) {
+        if (rec.createdFromJobBoard) {
+          await InterviewRecord.deleteOne({ _id: linkedRef });
+        } else {
+          await InterviewRecord.updateOne(
+            { _id: linkedRef },
+            { $set: { jobLinkUrl: "", jobLinkId: null } }
+          );
+        }
+      }
+    }
+
+    const populated = await JobLink.findById(job._id)
+      .populate("createdBy", "email name")
+      .populate({
+        path: "interviews.linkedInterviewRecordId",
+        select: "subjectName company roleTitle scheduledAt jobLinkUrl jobLinkId"
+      });
+    res.json(await attachJobProfileLabel(populated));
   } catch (error) {
     res.status(400).json({ message: "Failed to remove interview", error: error.message });
   }
@@ -183,8 +317,13 @@ router.post("/", async (req, res) => {
       jobProfileId,
       createdBy: req.user.id
     });
-    const populated = await JobLink.findById(newLink._id).populate("createdBy", "email name");
-    res.status(201).json(populated);
+    const populated = await JobLink.findById(newLink._id)
+      .populate("createdBy", "email name")
+      .populate({
+        path: "interviews.linkedInterviewRecordId",
+        select: "subjectName company roleTitle scheduledAt jobLinkUrl jobLinkId"
+      });
+    res.status(201).json(await attachJobProfileLabel(populated));
   } catch (error) {
     res.status(400).json({ message: "Failed to create job link", error: error.message });
   }
@@ -232,12 +371,14 @@ router.put("/:id", async (req, res) => {
       patch.jobProfileId = jobProfileIdUpdate;
     }
 
-    const updated = await JobLink.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true }).populate(
-      "createdBy",
-      "email name"
-    );
+    const updated = await JobLink.findByIdAndUpdate(req.params.id, patch, { new: true, runValidators: true })
+      .populate("createdBy", "email name")
+      .populate({
+        path: "interviews.linkedInterviewRecordId",
+        select: "subjectName company roleTitle scheduledAt jobLinkUrl jobLinkId"
+      });
 
-    res.json(updated);
+    res.json(await attachJobProfileLabel(updated));
   } catch (error) {
     res.status(400).json({ message: "Failed to update job link", error: error.message });
   }

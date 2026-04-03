@@ -233,7 +233,16 @@ export default function DashboardPage() {
         const interviewBlob = (item.interviews || [])
           .map((i) => `${i.label || ""} ${new Date(i.scheduledAt).toLocaleString()}`)
           .join(" ");
-        return [item.company, item.title, item.country, item.status, item.notes, addedBy, interviewBlob]
+        return [
+          item.company,
+          item.title,
+          item.country,
+          item.jobProfileLabel,
+          item.status,
+          item.notes,
+          addedBy,
+          interviewBlob
+        ]
           .join(" ")
           .toLowerCase()
           .includes(value);
@@ -275,8 +284,8 @@ export default function DashboardPage() {
           return (item.link || "").toLowerCase();
         case "date":
           return new Date(item.date).getTime() || 0;
-        case "status":
-          return (item.status || "").toLowerCase();
+        case "profile":
+          return (item.jobProfileLabel || "").toLowerCase();
         case "interviews":
           return (item.interviews || []).length;
         case "addedBy": {
@@ -353,6 +362,7 @@ export default function DashboardPage() {
             onSubmit={handleSubmit}
             editingItem={editingItem}
             onCancelEdit={() => setEditingItem(null)}
+            jobProfiles={user?.jobProfiles ?? []}
           />
           <ExcelImportCard onImported={handleExcelImported} />
         </aside>
@@ -387,7 +397,7 @@ export default function DashboardPage() {
               <div className="toolbar-search">
                 <input
                   ref={searchInputRef}
-                  placeholder="Search company, status, notes, added by…"
+                  placeholder="Search company, profile, notes, added by…"
                   value={query}
                   onChange={(e) => setQuery(e.target.value)}
                   aria-label="Search"

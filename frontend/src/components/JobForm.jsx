@@ -3,18 +3,20 @@ import { parseJobLinkFromUrl } from "../api";
 
 const todayISO = () => new Date().toISOString().slice(0, 10);
 
-const emptyForm = () => ({
+const emptyForm = (jobProfileId = "") => ({
   company: "",
   title: "",
   country: "",
   link: "",
   date: todayISO(),
   status: "Saved",
-  notes: ""
+  notes: "",
+  jobProfileId
 });
 
-function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef }) {
-  const [form, setForm] = useState(emptyForm);
+function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef, jobProfiles = [] }) {
+  const defaultProfileId = jobProfiles?.[0]?._id ? String(jobProfiles[0]._id) : "";
+  const [form, setForm] = useState(() => emptyForm(defaultProfileId));
   const [parsing, setParsing] = useState(false);
   const lastParsedLinkRef = useRef("");
 
@@ -28,13 +30,25 @@ function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef }) {
         link: editingItem.link || "",
         date: editingItem.date ? new Date(editingItem.date).toISOString().slice(0, 10) : todayISO(),
         status: editingItem.status || "Saved",
-        notes: editingItem.notes || ""
+        notes: editingItem.notes || "",
+        jobProfileId: editingItem.jobProfileId ? String(editingItem.jobProfileId) : ""
       });
     } else {
       lastParsedLinkRef.current = "";
-      setForm(emptyForm());
+      const pid = jobProfiles?.[0]?._id ? String(jobProfiles[0]._id) : "";
+      setForm(emptyForm(pid));
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset only when switching add/edit; profile backfill uses separate effect
   }, [editingItem]);
+
+  useEffect(() => {
+    if (editingItem) return;
+    if (!jobProfiles?.length) return;
+    setForm((prev) => {
+      if (prev.jobProfileId) return prev;
+      return { ...prev, jobProfileId: String(jobProfiles[0]._id) };
+    });
+  }, [jobProfiles, editingItem]);
 
   const handleChange = (e) => {
     const { name, value } = e.target;
@@ -93,7 +107,7 @@ function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef }) {
     e.preventDefault();
     await onSubmit(form);
     if (!editingItem) {
-      setForm(emptyForm());
+      setForm(emptyForm(defaultProfileId));
       lastParsedLinkRef.current = "";
     }
   };
@@ -143,6 +157,24 @@ function JobForm({ onSubmit, editingItem, onCancelEdit, linkInputRef }) {
       <label>
         Date
         <input name="date" type="date" value={form.date} onChange={handleChange} required />
+      </label>
+
+      <label>
+        Profile
+        <span className="field-hint">Which job-search profile this application is for (team stats).</span>
+        <select
+          name="jobProfileId"
+          value={form.jobProfileId}
+          onChange={handleChange}
+          aria-label="Job profile"
+        >
+          <option value="">—</option>
+          {jobProfiles.map((p) => (
+            <option key={p._id} value={String(p._id)}>
+              {p.label || "Profile"}
+            </option>
+          ))}
+        </select>
       </label>
 
       <label>

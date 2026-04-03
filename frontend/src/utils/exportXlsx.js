@@ -56,7 +56,7 @@ export function buildJobLinkExportRows(items) {
       Country: item.country ?? "",
       Link: item.link ?? "",
       Date: item.date ? new Date(item.date).toISOString().slice(0, 10) : "",
-      Status: item.status ?? "",
+      Profile: item.jobProfileLabel ?? "",
       Interviews: formatJobInterviews(item.interviews),
       "Added by": addedBy,
       Notes: item.notes ?? ""

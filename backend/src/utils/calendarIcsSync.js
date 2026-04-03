@@ -1,6 +1,26 @@
 import ical from "node-ical";
 import { InterviewRecord } from "../models/InterviewRecord.js";
 import { fetchIcsText } from "./calendarIcsFetch.js";
+import { interviewTypeFromPriorCompanyCount, parseCalendarEventFields } from "./calendarEventParse.js";
+
+function escapeRegex(s) {
+  return String(s).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * How many log rows this user already has with the same company before `beforeStart` (exclusive of `excludeId`).
+ */
+async function countPriorSameCompanyInterviews(subjectUserId, company, beforeStart, excludeId) {
+  const c = (company || "").trim();
+  if (!c) return 0;
+  const filter = {
+    subjectUserId,
+    company: new RegExp(`^${escapeRegex(c)}$`, "i"),
+    scheduledAt: { $lt: beforeStart }
+  };
+  if (excludeId) filter._id = { $ne: excludeId };
+  return InterviewRecord.countDocuments(filter);
+}
 
 function paramString(v) {
   if (v == null) return "";
@@ -73,14 +93,31 @@ export async function syncCalendarSourceToInterviews(source, ownerUserId) {
       }
 
       const extUid = `${baseUid}__${start.getTime()}`;
-      const summary =
-        paramString(inst.summary) || paramString(ev.summary) || "Calendar event";
+      const summaryText = paramString(inst.summary) || paramString(ev.summary) || "Calendar event";
+      const descText = paramString(inst.description) || paramString(ev.description);
       const loc = paramString(ev.location);
 
+      const parsed = parseCalendarEventFields(summaryText, descText, loc);
+
+      const existing = await InterviewRecord.findOne({
+        calendarSourceId: source._id,
+        externalEventUid: extUid
+      })
+        .select("_id")
+        .lean();
+
+      const prior = await countPriorSameCompanyInterviews(
+        ownerUserId,
+        parsed.company,
+        start,
+        existing?._id
+      );
+      const interviewType = interviewTypeFromPriorCompanyCount(prior);
+
       const notes = [
-        `Imported from ${label}.`,
+        `Synced from ${label}.`,
         ev.uid ? `ICS UID: ${ev.uid}` : "",
-        ev.description ? paramString(ev.description).slice(0, 500) : ""
+        descText ? descText.slice(0, 500) : ""
       ]
         .filter(Boolean)
         .join("\n");
@@ -89,15 +126,15 @@ export async function syncCalendarSourceToInterviews(source, ownerUserId) {
         { calendarSourceId: source._id, externalEventUid: extUid },
         {
           $set: {
-            subjectName: summary.slice(0, 200) || "Calendar event",
-            company: "External calendar",
-            roleTitle: summary.slice(0, 200) || "Imported event",
+            subjectName: parsed.subjectName || summaryText.slice(0, 200) || "Calendar event",
+            company: parsed.company,
+            roleTitle: parsed.roleTitle,
             profile: "",
             stack: "",
             scheduledAt: start,
             scheduledEndAt: end,
             timezone: "",
-            interviewType: "Calendar import",
+            interviewType,
             resultStatus: "",
             notes: notes.slice(0, 8000),
             jobLinkUrl: "",
